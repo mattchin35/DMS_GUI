@@ -24,14 +24,14 @@ class EndTrialSignal(QObject):
     signal = pyqtSignal()
 
 
-USE_DAQ = True
+USE_DAQ = False
 class DMSModel(QObject):
     """
     Model for the DMS training program. Will be adjusted to abstract
     repeated functions when moving to other programs.
     """
     lickSignal = pyqtSignal()
-    startTrialSignal = pyqtSignal(int)
+    startTrialSignal = pyqtSignal()
     endTrialSignal = pyqtSignal()
     endProgramSignal = pyqtSignal()
     intReady = pyqtSignal(int)
@@ -101,8 +101,8 @@ class DMSModel(QObject):
         self.cur_stage = 0
         self.total_time = np.zeros(4)  # odor1, delay, odor2, response
         # iti, no lick, odor1, delay, odor2, response, consumption
-        # self.timing = [.1] * 7  # for testing
-        self.timing = [3, .4, .5, 1.5, .5, 3, 1]  # standard times
+        self.timing = [.1] * 7  # for testing
+        # self.timing = [3, .4, .5, 1.5, .5, 3, 1]  # standard times
         self.early_lick_time = 0
         self.early_timeout = 6
         self.timeout = np.array([0, 5, 5, 0])  # timeout for error/switch
@@ -384,14 +384,14 @@ class DMSModel(QObject):
                 break
 
             # Testing
-            # side = random.getrandbits(1)
-            # if side == self.correct_choice:
-            #     choice = 0  # correct
-            #     self.give_water = True
-            # else:
-            #     choice = 1  # error
-            #     self.give_water = False
-            # break
+            side = random.getrandbits(1)
+            if side == self.correct_choice:
+                choice = 0  # correct
+                self.give_water = True
+            else:
+                choice = 1  # error
+                self.give_water = False
+            break
 
             # TESTING DATA - DELETE IF NOT TESTING
             # if bool(random.getrandbits(1)):
@@ -451,6 +451,19 @@ class DMSModel(QObject):
         self.error_trials = [[], []]
         self.switch_trials = [[], []]
         self.miss_trials = [[], []]
+        self.probabilities = np.ones(self.num_odors) / self.num_odors
+
+    def update_probabilities(self):
+        perc_corr = self.performance_stimulus[:,2] / self.performance_stimulus[:,0]
+        avg_perc_correct = np.mean(perc_corr)
+        diff = perc_corr - avg_perc_correct
+        diff *= 2 / self.num_odors
+        p = np.ones(self.num_odors) / self.num_odors - diff
+        if np.sum(np.isnan(p)) > 0:
+            return
+        else:
+            self.probabilities = self.softmax(p)
+            print("Probabilities: ", self.probabilities)
 
     def prepare_plot_data(self, choice):
         if choice == 0:
@@ -490,6 +503,16 @@ class DMSModel(QObject):
         if lr[1] > 0:
             self.performance_overall[6, 1] = self.performance_overall[6, 0] / lr[1]
             self.performance_overall[8, 1] = self.performance_overall[8, 0] / lr[1]
+
+    @staticmethod
+    def softmax(x):
+        """
+        Compute softmax vector of x.
+        :param x: input vector of log probabilities.
+        :return: y, softmax vector
+        """
+        x = np.exp(x - np.amax(x))  # normalization to max of 0
+        return x / np.sum(x)
 
     @pyqtSlot()
     def run_program(self):
@@ -534,7 +557,7 @@ class DMSModel(QObject):
             self.trial_num += 1
             self.trialArray.append(self.trial_num)
             # self.startTrialSignal.signal.emit()
-            self.startTrialSignal.emit(self.trial_num)
+            self.startTrialSignal.emit()
 
             events = [self.trial_num, self.trial_type]
             times = ['NaN'] * 13
@@ -546,8 +569,8 @@ class DMSModel(QObject):
             times[t_idx] = time.perf_counter()  # iti start
             t_idx += 1
             iti = self.timing[self.cur_stage] + self.timeout[choice] + 6 * early[0]
-            # self.run_interval(self.timing[self.cur_stage])
-            self.run_interval(iti)
+            self.run_interval(self.timing[self.cur_stage])
+            # self.run_interval(iti)
 
             # print('no lick')
             self.cur_stage += 1  # 1
@@ -607,6 +630,8 @@ class DMSModel(QObject):
             self.run_interval(self.timing[-1])  # consumption time is last
 
             self.prepare_plot_data(choice)
+            # if self.random or self.trial_num > 30:
+            self.update_probabilities()
 
             times[t_idx] = 'NaN'
             t_idx += 1  # 'noise_onset'

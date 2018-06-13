@@ -438,9 +438,9 @@ class Ui_trainingWindow:
         self.menubar.addAction(self.menu_View.menuAction())
         self.menubar.addAction(self.menu_Help.menuAction())
 
-        self.baProbabilityLineEdit = QtWidgets.QLineEdit(self.controlsGroup)
-        self.baProbabilityLineEdit.setGeometry(QtCore.QRect(330, 170, 41, 31))
-        self.baProbabilityLineEdit.setObjectName("baProbabilityLineEdit")
+        self.baCustomProbabilityTextBrowser = QtWidgets.QTextBrowser(self.controlsGroup)
+        self.baCustomProbabilityTextBrowser.setGeometry(QtCore.QRect(330, 170, 41, 31))
+        self.baCustomProbabilityTextBrowser.setObjectName("baCustomProbabilityTextBrowser")
         self.aaProbabilityLineEdit = QtWidgets.QLineEdit(self.controlsGroup)
         self.aaProbabilityLineEdit.setGeometry(QtCore.QRect(330, 80, 41, 31))
         self.aaProbabilityLineEdit.setObjectName("aaProbabilityLineEdit")
@@ -576,7 +576,7 @@ class Ui_trainingWindow:
         self.bbProbabilityLabel.setText(_translate("MainWindow", "BB"))
         self.baProbabilityLabel.setText(_translate("MainWindow", "BA"))
         self.useUserProbComboBox.setItemText(0, _translate("MainWindow", "Automatic"))
-        self.useUserProbComboBox.setItemText(0, _translate("MainWindow", "Custom"))
+        self.useUserProbComboBox.setItemText(1, _translate("MainWindow", "Custom"))
         self.useUserProbLabel.setText(_translate("MainWindow", "Probability source"))
 
 

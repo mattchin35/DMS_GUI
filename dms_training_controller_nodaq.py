@@ -139,11 +139,13 @@ class Controller(QObject):
             self.autoProbability[i].setText("{:.2f}".format(self.model.probabilities[i]))
 
         self.customProbability = [self.trainingUi.aaProbabilityLineEdit, self.trainingUi.abProbabilityLineEdit,
-                                  self.trainingUi.bbProbabilityLineEdit, self.trainingUi.baProbabilityLineEdit]
+                                  self.trainingUi.bbProbabilityLineEdit, self.trainingUi.baCustomProbabilityTextBrowser]
+        for i in range(4):
+            self.customProbability[i].setText("{:.2f}".format(self.model.user_probabilities[i]))
+
         self.trainingUi.aaProbabilityLineEdit.returnPressed.connect(lambda: self.probEditChanges(0))
         self.trainingUi.abProbabilityLineEdit.returnPressed.connect(lambda: self.probEditChanges(1))
         self.trainingUi.bbProbabilityLineEdit.returnPressed.connect(lambda: self.probEditChanges(2))
-        self.trainingUi.baProbabilityLineEdit.returnPressed.connect(lambda: self.probEditChanges(3))
 
         self.changeTrialStruct()
         self.setDataTables()
@@ -159,10 +161,15 @@ class Controller(QObject):
         self.pg_trialByTrial.setYRange(0, 3, padding=None)
         self.pg_correctP.setYRange(0, 100, padding=None)
 
-        self.pg_trialByTrial.plot()
+        # self.trialByTrialData = self.pg_trialByTrial.plot()
 
         # self.model.startTrialSignal.signal.connect(self.startTrialInputs)
         # self.model.endTrialSignal.signal.connect(self.endTrialInputs)
+
+        self.trainingUi.leftLickIndicatorWidget.setStyleSheet(
+            "QWidget { background-color: %s}" % self.led_off.name())
+        self.trainingUi.rightLickIndicatorWidget.setStyleSheet(
+            "QWidget { background-color: %s}" % self.led_off.name())
 
         self.thread.start()
         self.trainingUi.mainWindow.show() 
@@ -215,19 +222,17 @@ class Controller(QObject):
         else:
             self.model.use_user_probs = True
 
-    def startTrialInputs(self, i):
-        print('Trial: {}'.format(i))
-        self.trainingUi.trialNoTextBrowser.setText("{}".format(i))
+    def startTrialInputs(self):
+        print('Trial: {}'.format(self.model.trial_num))
+        self.trainingUi.trialNoTextBrowser.setText("{}".format(self.model.trial_num))
         self.trainingUi.trialTypeTextBrowser.setText(['AA', 'AB', 'BB', 'BA'][self.model.trial_type])
-
-        # self.trainingUi.itiLineEdit.returnPressed.connect(lambda: self.lineEditChanges('iti'))
-        # self.trainingUi.noLickTimeLineEdit.returnPressed.connect(lambda: self.lineEditChanges('noLick'))
-        # self.trainingUi.odor1LineEdit.returnPressed.connect(lambda: self.lineEditChanges('odor1'))
-        # self.trainingUi.delay1LineEdit.returnPressed.connect(lambda: self.lineEditChanges('delay'))
-        # self.trainingUi.odor2LineEdit.returnPressed.connect(lambda: self.lineEditChanges('odor2'))
-        # self.trainingUi.responseWindowLineEdit.returnPressed.connect(lambda: self.lineEditChanges('response'))
+        for i in range(self.model.num_odors):
+            self.autoProbability[i].setText("{:.2f}".format(self.model.probabilities[i]))
 
     def curAnimalChanges(self):
+        if self.model.mouse == self.trainingUi.curAnimalLineEdit.text():
+            return
+
         if self.model.mouse:  # must come before model.mouse is changed
             self.model.refresh = True
             print("metric data has been refreshed due to mouse change")
@@ -261,7 +266,14 @@ class Controller(QObject):
 
     def probEditChanges(self, idx):
         try:
-            self.model.user_probabilities[idx] = int(self.customProbability[idx].text())
+            newsum = np.sum(self.model.user_probabilities[:3]) - self.model.user_probabilities[idx] \
+                     + float(self.customProbability[idx].text())
+            if newsum <= 1:
+                self.model.user_probabilities[idx] = float(self.customProbability[idx].text())
+                self.model.user_probabilities[3] = 1 - np.sum(self.model.user_probabilities[:3])
+                self.customProbability[3].setText("{:.2f}".format(self.model.user_probabilities[3]))
+            else:
+                self.invalidInputMsg()
         except:
             self.invalidInputMsg()
 
@@ -357,10 +369,14 @@ class Controller(QObject):
         return self.chosendir
 
     def changeDirTraining(self):
+        new_dir = QFileDialog.getExistingDirectory(None, 'Select a folder:', 'C:\\', QFileDialog.ShowDirsOnly)
+        if new_dir == self.model.save_path:
+            return
+
         if self.model.save_path:  # must come first
             self.model.refresh = True
             print("metric data has been refreshed due to directory change")
-        new_dir = QFileDialog.getExistingDirectory(None, 'Select a folder:', 'C:\\', QFileDialog.ShowDirsOnly)
+
         self.trainingUi.curPathLineEdit.setText(new_dir)
         self.model.save_path = new_dir
         self.refreshSaveFiles()
@@ -381,6 +397,10 @@ class Controller(QObject):
     def refreshSaveFiles(self):
         self.model.events_file = self.model.save_path + '/' + self.model.mouse + '_events'
         self.model.licking_file = self.model.save_path + '/' + self.model.mouse + '_licking'
+
+        self.pg_trialByTrial.plot(clear=True)
+        self.pg_correctP.plot(clear=True)
+        self.pg_bias.plot(clear=True)
 
     def invalidInputMsg(self):
         msg = QErrorMessage()
