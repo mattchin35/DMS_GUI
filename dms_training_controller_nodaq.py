@@ -95,6 +95,7 @@ class Controller(QObject):
         # DROPDOWN LISTS
         self.trainingUi.trialStructureComboBox.currentTextChanged.connect(self.changeTrialStruct)
         self.trainingUi.trialTypeComboBox.currentTextChanged.connect(self.changeTrialTypeMode)
+        self.trainingUi.useUserProbComboBox.currentTextChanged.connect(self.changeProbSource)
 
         # MODEL SIGNALS
         self.model.startTrialSignal.connect(self.startTrialInputs)
@@ -127,7 +128,23 @@ class Controller(QObject):
         self.trainingUi.bbLowerLineEdit.returnPressed.connect(lambda: self.lbEditChanges(2))
         self.trainingUi.baLowerLineEdit.returnPressed.connect(lambda: self.lbEditChanges(3))
 
+        self.trainingUi.errorTOLineEdit.returnPressed.connect(lambda: self.changeErrorTO())
+        self.trainingUi.earlyLickTOLineEdit.returnPressed.connect(lambda: self.changeEarlyTO())
+
         self.trainingUi.minLicksLineEdit.returnPressed.connect(self.minLicksChanges)
+
+        self.autoProbability = [self.trainingUi.aaProbabilityTextBrowser, self.trainingUi.abProbabilityTextBrowser,
+                                self.trainingUi.bbProbabilityTextBrowser, self.trainingUi.baProbabilityTextBrowser]
+        for i in range(4):
+            self.autoProbability[i].setText("{:.2f}".format(self.model.probabilities[i]))
+
+        self.customProbability = [self.trainingUi.aaProbabilityLineEdit, self.trainingUi.abProbabilityLineEdit,
+                                  self.trainingUi.bbProbabilityLineEdit, self.trainingUi.baProbabilityLineEdit]
+        self.trainingUi.aaProbabilityLineEdit.returnPressed.connect(lambda: self.probEditChanges(0))
+        self.trainingUi.abProbabilityLineEdit.returnPressed.connect(lambda: self.probEditChanges(1))
+        self.trainingUi.bbProbabilityLineEdit.returnPressed.connect(lambda: self.probEditChanges(2))
+        self.trainingUi.baProbabilityLineEdit.returnPressed.connect(lambda: self.probEditChanges(3))
+
         self.changeTrialStruct()
         self.setDataTables()
 
@@ -142,11 +159,13 @@ class Controller(QObject):
         self.pg_trialByTrial.setYRange(0, 3, padding=None)
         self.pg_correctP.setYRange(0, 100, padding=None)
 
+        self.pg_trialByTrial.plot()
+
         # self.model.startTrialSignal.signal.connect(self.startTrialInputs)
         # self.model.endTrialSignal.signal.connect(self.endTrialInputs)
 
         self.thread.start()
-        self.trainingUi.mainWindow.show()
+        self.trainingUi.mainWindow.show() 
 
     def lickIndicator(self):
         ind = self.model.indicator.flatten()
@@ -169,7 +188,8 @@ class Controller(QObject):
 
     def timeDisplay(self, t):
         self.timeBoxes[self.model.cur_stage].setText("{:.3f}".format(t))
-        self.timeBoxes[-1].setText("{:.3f}".format(np.sum(self.model.total_time)))
+        if self.model.cur_stage < 5:
+            self.timeBoxes[-1].setText("{:.3f}".format(np.sum(self.model.total_time)))
 
     def changeTrialTypeMode(self):
         trial_type = self.trainingUi.trialTypeComboBox.currentText()
@@ -188,6 +208,13 @@ class Controller(QObject):
         elif trial_struct == 'Alternating':
             self.model.random = False
 
+    def changeProbSource(self):
+        source = self.trainingUi.useUserProbComboBox.currentText()
+        if source == 'Automatic':
+            self.model.use_user_probs = False
+        else:
+            self.model.use_user_probs = True
+
     def startTrialInputs(self, i):
         print('Trial: {}'.format(i))
         self.trainingUi.trialNoTextBrowser.setText("{}".format(i))
@@ -201,12 +228,12 @@ class Controller(QObject):
         # self.trainingUi.responseWindowLineEdit.returnPressed.connect(lambda: self.lineEditChanges('response'))
 
     def curAnimalChanges(self):
-        if self.model.mouse: # must come before model.mouse is changed
-            self.refreshSaveFiles()
+        if self.model.mouse:  # must come before model.mouse is changed
             self.model.refresh = True
             print("metric data has been refreshed due to mouse change")
-        self.model.mouse = self.trainingUi.curAnimalLineEdit.text()
 
+        self.model.mouse = self.trainingUi.curAnimalLineEdit.text()
+        self.refreshSaveFiles()
 
     def timingEditChanges(self, idx):
         try:
@@ -232,40 +259,11 @@ class Controller(QObject):
         except:
             self.invalidInputMsg()
 
-    # def lineEditChanges(self, edit):
-    #     try:
-    #         if edit == 'iti':
-    #             self.model.iti = float(self.trainingUi.itiLineEdit.text())
-    #         elif edit == 'noLick':
-    #             self.model.no_lick = float(self.trainingUi.noLickTimeLineEdit.text())
-    #         elif edit == 'odor1':
-    #             self.model.odor_times[0] = float(self.trainingUi.odor1LineEdit.text())
-    #         elif edit == 'delay':
-    #             self.model.delay = float(self.trainingUi.delay1LineEdit.text())
-    #         elif edit == 'odor2':
-    #             self.model.odor_times[1] = float(self.trainingUi.odor2LineEdit.text())
-    #         elif edit == 'response':
-    #             self.model.response_window = float(self.trainingUi.responseWindowLineEdit.text())
-    #         # elif edit == 'aaUpper':
-    #         #     self.model.hi_bounds[0] = int(self.trainingUi.aaUpperLineEdit)
-    #         # elif edit == 'abUpper':
-    #         #     self.model.hi_bounds[1] = int(self.trainingUi.abUpperLineEdit)
-    #         # elif edit == 'bbUpper':
-    #         #     self.model.hi_bounds[2] = int(self.trainingUi.bbUpperLineEdit)
-    #         # elif edit == 'baUpper':
-    #         #     self.model.hi_bounds[3] = int(self.trainingUi.baUpperLineEdit)
-    #         # elif edit == 'aaLower':
-    #         #     self.model.hi_bounds[0] = int(self.trainingUi.aaLowerLineEdit)
-    #         # elif edit == 'abLower':
-    #         #     self.model.hi_bounds[1] = int(self.trainingUi.abLowerLineEdit)
-    #         # elif edit == 'bbLower':
-    #         #     self.model.hi_bounds[2] = int(self.trainingUi.bbLowerLineEdit)
-    #         # elif edit == 'baLower':
-    #         #     self.model.hi_bounds[3] = int(self.trainingUi.baLowerLineEdit)
-    #     except:
-    #         # add message boxes or warning textbox?
-    #         # self.msgBox('invalid_time')
-    #         print('invalid time')
+    def probEditChanges(self, idx):
+        try:
+            self.model.user_probabilities[idx] = int(self.customProbability[idx].text())
+        except:
+            self.invalidInputMsg()
 
     def endTrialInputs(self):
         self.plot()
@@ -323,7 +321,6 @@ class Controller(QObject):
         current_trial = self.model.trial_num
 
         #   Trial-by-Trial Graphic
-        self.pg_trialByTrial.plot()
         self.pg_trialByTrial.plot(self.model.correct_trials[0], self.model.correct_trials[1], pen=None, symbol='o', symbolBrush='g')
         self.pg_trialByTrial.plot(self.model.error_trials[0], self.model.error_trials[1], pen=None, symbol='o', symbolBrush='r')
         self.pg_trialByTrial.plot(self.model.switch_trials[0], self.model.switch_trials[1], pen=None, symbol='o', symbolBrush='y')
@@ -360,14 +357,26 @@ class Controller(QObject):
         return self.chosendir
 
     def changeDirTraining(self):
-        if self.model.save_path: # must come first
+        if self.model.save_path:  # must come first
             self.model.refresh = True
             print("metric data has been refreshed due to directory change")
         new_dir = QFileDialog.getExistingDirectory(None, 'Select a folder:', 'C:\\', QFileDialog.ShowDirsOnly)
         self.trainingUi.curPathLineEdit.setText(new_dir)
         self.model.save_path = new_dir
         self.refreshSaveFiles()
+        # self.model.refresh = True
 
+    def changeErrorTO(self):
+        try:
+            self.model.timeout[1:3] = int(self.trainingUi.errorTOLineEdit.text())
+        except:
+            self.invalidInputMsg()
+
+    def changeEarlyTO(self):
+        try:
+            self.model.early_timeout = int(self.trainingUi.earlyLickTOLineEdit.text())
+        except:
+            self.invalidInputMsg()
 
     def refreshSaveFiles(self):
         self.model.events_file = self.model.save_path + '/' + self.model.mouse + '_events'
@@ -377,7 +386,6 @@ class Controller(QObject):
         msg = QErrorMessage()
         msg.showMessage("Invalid input")
         msg.exec()
-
 
 """
 TO-DO:
