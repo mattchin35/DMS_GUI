@@ -101,8 +101,8 @@ class DMSModel(QObject):
         self.cur_stage = 0
         self.total_time = np.zeros(4)  # odor1, delay, odor2, response
         # iti, no lick, odor1, delay, odor2, response, consumption
-        self.timing = [.1] * 7  # for testing
-        # self.timing = [3, .4, .5, 1.5, .5, 3, 1]  # standard times
+        # self.timing = [.1] * 7  # for testing
+        self.timing = [3, .4, .5, 1.5, .5, 3, 1]  # standard times
         self.early_lick_time = 0
         self.early_timeout = 6
         self.timeout = np.array([0, 5, 5, 0])  # timeout for error/switch
@@ -384,20 +384,14 @@ class DMSModel(QObject):
                 break
 
             # Testing
-            side = random.getrandbits(1)
-            if side == self.correct_choice:
-                choice = 0  # correct
-                self.give_water = True
-            else:
-                choice = 1  # error
-                self.give_water = False
-            break
-
-            # TESTING DATA - DELETE IF NOT TESTING
-            # if bool(random.getrandbits(1)):
-            #     choice = 0
+            # side = random.getrandbits(1)
+            # if side == self.correct_choice:
+            #     choice = 0  # correct
+            #     self.give_water = True
             # else:
-            #     choice = 1
+            #     choice = 1  # error
+            #     self.give_water = False
+            # break
 
         self.trial_correct_history.append(choice)
         result[choice] = 1
@@ -630,8 +624,8 @@ class DMSModel(QObject):
             self.run_interval(self.timing[-1])  # consumption time is last
 
             self.prepare_plot_data(choice)
-            # if self.random or self.trial_num > 30:
-            self.update_probabilities()
+            if self.random or self.trial_num > 30:
+                self.update_probabilities()
 
             times[t_idx] = 'NaN'
             t_idx += 1  # 'noise_onset'
