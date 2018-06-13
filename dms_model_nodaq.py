@@ -1,4 +1,4 @@
-import time, random
+import time, random, collections
 import numpy as np
 import pandas as pd
 import nidaqmx as ni
@@ -7,7 +7,7 @@ from nidaqmx.constants import LineGrouping
 from PyQt5.QtCore import QDate, QTime, QDateTime, Qt, pyqtSignal, pyqtSlot, QObject
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import QIcon, QFont
-import sys, os, csv, collections
+import sys, os, csv
 
 class LickSignal(QObject):
     """A signal for when the lick indicator is updated."""
@@ -84,7 +84,7 @@ class DMSModel(QObject):
         self.use_user_probs = False
         self.user_probabilities = self.probabilities.copy()
         self.save_path = ''  # save location
-        self.mouse = 'test'  # Mouse name
+        self.mouse = ''  # Mouse name
         self.events_file = ''
         self.licking_file = ''
         self.run = False
@@ -101,11 +101,8 @@ class DMSModel(QObject):
         self.cur_stage = 0
         self.total_time = np.zeros(4)  # odor1, delay, odor2, response
         # iti, no lick, odor1, delay, odor2, response, consumption
-        self.timing = [.1] * 7  # for testing
-        # self.timing = [3, .4, .5, 1.5, .5, 3, 1]  # standard times
+        self.timing = [3, .4, .5, 1.5, .5, 3, 1]
         self.early_lick_time = 0
-        self.early_timeout = 6
-        self.timeout = np.array([0, 5, 5, 0])  # timeout for error/switch
 
         # water output
         self.trials_to_water = 5
@@ -120,13 +117,13 @@ class DMSModel(QObject):
         if USE_DAQ:
             # system = ni.system.System.local()
             self.out_task = ni.Task()
-            self.out_task.do_channels.add_do_chan('cDAQ1Mod1/port0/line0:7',
+            self.out_task.do_channels.add_do_chan('cDAQ2Mod1/port0/line0:7',
                                                   line_grouping=LineGrouping.CHAN_PER_LINE)
             self.writer = ni.stream_writers.DigitalMultiChannelWriter(self.out_task.out_stream)
             self.out_task.start()
 
             self.in_task = ni.Task()
-            self.in_task.di_channels.add_di_chan('Dev1/port0/line0:1',
+            self.in_task.di_channels.add_di_chan('Dev2/port0/line0:1',
                                                  line_grouping=LineGrouping.CHAN_PER_LINE)
             self.reader = ni.stream_readers.DigitalMultiChannelReader(self.in_task.in_stream)
             self.in_task.start()
@@ -137,13 +134,6 @@ class DMSModel(QObject):
 
         # DAQ output arrays
         self.all_low = [False] * 8
-        self.go_cue = [False] * 8
-        self.light = [False] * 8
-        self.siren = [False] * 8
-
-        self.go_cue[2] = True
-        self.light[3] = True
-        self.siren[4] = True
 
         odor_a = list(self.all_low)
         odor_a[5] = True
@@ -259,18 +249,11 @@ class DMSModel(QObject):
             time.sleep(.001)
             t = time.time() - st
             self.update_indicator()
-            if self.cur_stage == 0:
-                self.output = self.light
-                self.write()
-            elif self.cur_stage == 3:
+            if self.cur_stage == 3:
                 # stimulus time is staggered by two indices - only delay uses this function during stimulus
                 self.total_time[self.cur_stage - 2] = t
-
             if self.cur_stage < 5:
                 self.intervalTime.emit(t)
-
-        self.output = self.all_low
-        self.write()
 
     def run_no_lick(self):
         """Delay the trial until the mouse stops licking for a desired time."""
@@ -311,7 +294,7 @@ class DMSModel(QObject):
             self.update_indicator()
 
             if cue == 1:
-                if np.sum(self.indicator) > 0 and t < self.early_lick_time:
+                if np.sum(self.indicator) > 0 and  t < self.early_lick_time:
                     early = [1]
 
         self.output = list(self.all_low)
@@ -339,14 +322,8 @@ class DMSModel(QObject):
             t = time.time() - st
             self.total_time[self.cur_stage - 2] = t
             self.intervalTime.emit(t)
-            if t < .15:
-                self.output = self.go_cue
-                self.write()
-            elif self.output == self.go_cue:
-                self.output = self.all_low
-                self.write()
-
             self.update_indicator()
+
             sum_ind = np.sum(self.indicator)
             if np.sum(sum_ind > 1):
                 # error, licked both at the same time
@@ -379,7 +356,7 @@ class DMSModel(QObject):
                     choice = 1  # error
                 break
 
-            # Testing
+            #   # Testing
             side = random.getrandbits(1)
             if side == self.correct_choice:
                 choice = 0  # correct
@@ -412,6 +389,7 @@ class DMSModel(QObject):
         # self.out_task.write()
 
     def shut_down(self):
+        # pass
         self.out_task.stop()
         self.in_task.stop()
         self.out_task.close()
@@ -441,12 +419,6 @@ class DMSModel(QObject):
         self.trial_type = 0  # current trial type
         self.trial_type_progress *= 0  # correct count, total number of trial type seen
         self.prev_trial *= 0
-        self.correct_avg = []
-        self.bias = []
-        self.correct_trials = [[], []]
-        self.error_trials = [[], []]
-        self.switch_trials = [[], []]
-        self.miss_trials = [[], []]
 
     def prepare_plot_data(self, choice):
         if choice == 0:
@@ -466,7 +438,7 @@ class DMSModel(QObject):
             tmp = self.trial_correct_history
         else:
             tmp = self.trial_correct_history[-30:]
-        # self.correct_avg.append(np.sum(tmp[tmp == 0]) / len(tmp) * 100)
+        # self.correct_avg.append(np.sum(tmp[tmp == 1]) / len(tmp) * 100)
         self.correct_avg.append(collections.Counter(tmp)[0] / len(tmp) * 100)
 
         self.bias.append(self.performance_overall[5,0] - self.performance_overall[6,0])
@@ -495,8 +467,6 @@ class DMSModel(QObject):
             # check the percent correct
 
         self.run = True
-        choice = 0
-        early = [0]
         while self.run:
             # File I/O
             if self.events_file == '':
@@ -531,7 +501,6 @@ class DMSModel(QObject):
             self.trialArray.append(self.trial_num)
             # self.startTrialSignal.signal.emit()
             self.startTrialSignal.emit(self.trial_num)
-
             events = [self.trial_num, self.trial_type]
             times = ['NaN'] * 13
 
@@ -541,7 +510,6 @@ class DMSModel(QObject):
             t_idx = 0
             times[t_idx] = time.perf_counter()  # iti start
             t_idx += 1
-            iti = self.timing[self.cur_stage] + self.timeout[choice] + 6 * early[0]
             self.run_interval(self.timing[self.cur_stage])
             # self.run_interval(self.iti)
 
@@ -615,6 +583,8 @@ class DMSModel(QObject):
             print('Events:\n', events)
             print('Licking:\n', self.licking_export)
             print(len(perfect), len(result), len(early), len(lick))
+            print('Trial_correct_history:\n', self.trial_correct_history)
+            print('Correct_avg:\n', self.correct_avg)
             self.licking_export = []
             if self.refresh:
                 self.refresh_metrics()
