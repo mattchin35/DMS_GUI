@@ -203,6 +203,14 @@ class Ui_trainingWindow:
         self.controlsLine2.setFrameShape(QtWidgets.QFrame.HLine)
         self.controlsLine2.setFrameShadow(QtWidgets.QFrame.Sunken)
         self.controlsLine2.setObjectName("controlsLine2")
+        self.automateComboBox = QtWidgets.QComboBox(self.controlsGroup)
+        self.automateComboBox.setGeometry(QtCore.QRect(10, 30, 91, 31))
+        self.automateComboBox.setObjectName("automateComboBox")
+        self.automateComboBox.addItem("")
+        self.automateComboBox.addItem("")
+        self.automateLabel = QtWidgets.QLabel(self.controlsGroup)
+        self.automateLabel.setGeometry(QtCore.QRect(10, 5, 91, 31))
+        self.automateLabel.setObjectName("controlType")
         self.trialStructureComboBox = QtWidgets.QComboBox(self.controlsGroup)
         self.trialStructureComboBox.setGeometry(QtCore.QRect(140, 100, 91, 31))
         self.trialStructureComboBox.setObjectName("trialStructureComboBox")
@@ -578,6 +586,9 @@ class Ui_trainingWindow:
         self.useUserProbComboBox.setItemText(0, _translate("MainWindow", "Automatic"))
         self.useUserProbComboBox.setItemText(1, _translate("MainWindow", "Custom"))
         self.useUserProbLabel.setText(_translate("MainWindow", "Probability source"))
+        self.automateComboBox.setItemText(0, _translate("MainWindow", "Manual"))
+        self.automateComboBox.setItemText(1, _translate("MainWindow", "Automate"))
+        self.automateLabel.setText(_translate("MainWindow", "Control Type"))
 
 
 

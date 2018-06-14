@@ -39,7 +39,7 @@ class DMSModel(QObject):
 
     def __init__(self):
         super().__init__()
-        self.num_odors = 4
+        self.num_trial_types = 4
 
         # performance
         self.trial_num = 0
@@ -52,8 +52,8 @@ class DMSModel(QObject):
         self.performance_overall = np.zeros((9, 2))  # was 8 2
         # correct, error, switch, miss, early_lick, left, right, l reward, r reward
         # left column numbers, right column 
-        self.performance_stimulus = np.zeros((self.num_odors, 7))
-        # num trials, % perfect, correct, error, switch, miss, early
+        self.performance_stimulus = np.zeros((self.num_trial_types, 7))
+        # num trials, % perfect, %correct, %error, %switch, %miss, %early
         self.licking_export = []
         # trial no, tr_type, perfect, correct, error, switch, miss, early_lick,
         # left, right, L_rew, R_rew, iti_st, tr_st, stim_st, 1st_odor, delay,
@@ -69,14 +69,15 @@ class DMSModel(QObject):
         # Trial selection
         self.trial_type = 0  # current trial type
         self.random_hi_bound = -1  # starting value
-        self.low_bounds = np.ones(self.num_odors)
-        self.hi_bounds = np.ones(self.num_odors) * 3
+        self.low_bounds = np.ones(self.num_trial_types)
+        self.hi_bounds = np.ones(self.num_trial_types) * 3
         self.structure = 2  # 0 for AA/AB, 1 for BB/BA, 2 for Full
         self.trial_type_progress = np.zeros(2)  # correct count, total number of trial type seen
-        self.probabilities = np.ones(self.num_odors) / self.num_odors
+        self.probabilities = np.ones(self.num_trial_types) / self.num_trial_types
         self.prev_trial = np.zeros(3)
         self.strict_ub = 10  # number of trials before the program switches trials automatically
         self.correct_choice = 0
+        self.min_trial_to_auto = np.array([30, 30])  # number of trials to check before auto change. 0 alt, 1 random
 
         # User options
         self.random = False
@@ -91,25 +92,19 @@ class DMSModel(QObject):
         self.refresh = False
 
         # Timing - values in seconds
-        # self.iti = 1 #3
-        # self.no_lick = .4
-        # self.odor_times = [.5, .5]
-        # self.delay = .5 #1.5
-        # self.response_window = .5 # 3
-        # self.consumption_time = .1
         self.min_licks = 2
         self.cur_stage = 0
         self.total_time = np.zeros(4)  # odor1, delay, odor2, response
         # iti, no lick, odor1, delay, odor2, response, consumption
-        # self.timing = [.1] * 7  # for testing
-        self.timing = [3, .4, .5, 1.5, .5, 3, 1]  # standard times
+        self.timing = [.1] * 7  # for testing
+        # self.timing = [3, .4, .5, 1.5, .5, 3, 1]  # standard times
         self.early_lick_time = 0
         self.early_timeout = 6
         self.timeout = np.array([0, 5, 5, 0])  # timeout for error/switch
 
         # water output
         self.trials_to_water = 5
-        self.water_times = [.1, .1]
+        self.water_times = [.06, .06]
         self.give_water = False
 
         # make an array for digital output
@@ -205,6 +200,15 @@ class DMSModel(QObject):
             self.trial_type_progress *= 0
             self.set_trial_hi()
 
+        if self.automate:
+            trange = self.min_trial_to_auto[0]
+            if self.trial_num >= trange:
+                trials_in_range = self.trial_correct_history[(len(self.trial_correct_history)-trange)
+                                                             :len(self.trial_correct_history)]
+                recent_avg = collections.Counter(trials_in_range)[0] / trange
+                if recent_avg >= .8:
+                    self.random = True
+
     def choose_random_trial(self):
         """
         Choose the next random trial to run. A trial type is selected and set to run
@@ -224,6 +228,15 @@ class DMSModel(QObject):
 
             self.trial_type_progress *= 0
             self.set_trial_hi()
+
+        if self.automate:
+            trange = self.min_trial_to_auto[1]
+            if self.trial_num >= trange:
+                trials_in_range = self.trial_correct_history[(len(self.trial_correct_history) - trange)
+                                                             :len(self.trial_correct_history)]
+                recent_avg = collections.Counter(trials_in_range)[0] / trange
+                if recent_avg <= .8:
+                    self.random = False
 
     def set_trial_hi(self):
         """Make the above code less wordy with this shortcut."""
@@ -384,14 +397,14 @@ class DMSModel(QObject):
                 break
 
             # Testing
-            # side = random.getrandbits(1)
-            # if side == self.correct_choice:
-            #     choice = 0  # correct
-            #     self.give_water = True
-            # else:
-            #     choice = 1  # error
-            #     self.give_water = False
-            # break
+            side = random.getrandbits(1)
+            if side == self.correct_choice:
+                choice = 0  # correct
+                self.give_water = True
+            else:
+                choice = 1  # error
+                self.give_water = False
+            break
 
         self.trial_correct_history.append(choice)
         result[choice] = 1
@@ -445,14 +458,14 @@ class DMSModel(QObject):
         self.error_trials = [[], []]
         self.switch_trials = [[], []]
         self.miss_trials = [[], []]
-        self.probabilities = np.ones(self.num_odors) / self.num_odors
+        self.probabilities = np.ones(self.num_trial_types) / self.num_trial_types
 
     def update_probabilities(self):
         perc_corr = self.performance_stimulus[:,2] / self.performance_stimulus[:,0]
         avg_perc_correct = np.mean(perc_corr)
         diff = perc_corr - avg_perc_correct
-        diff *= 2 / self.num_odors
-        p = np.ones(self.num_odors) / self.num_odors - diff
+        diff *= 2 / self.num_trial_types
+        p = np.ones(self.num_trial_types) / self.num_trial_types - diff
         if np.sum(np.isnan(p)) > 0:
             return
         else:
@@ -483,13 +496,17 @@ class DMSModel(QObject):
         self.bias.append(self.performance_overall[5,0] - self.performance_overall[6,0])
 
     def update_performance(self, choice, result, early, lick):
+        # get total number of a result, add 1 and divide by new total trial type
+        cnt = self.performance_stimulus[self.trial_type, 2:] * self.performance_stimulus[self.trial_type, 0]
         self.performance_stimulus[self.trial_type, 0] += 1
-        self.performance_stimulus[self.trial_type, 2 + choice] += 1
+        cnt[choice] += 1
+        self.performance_stimulus[self.trial_type, 2:] = cnt / self.performance_stimulus[self.trial_type, 0]
 
         tmp = np.sum(self.performance_stimulus, axis=1)
         lr = [tmp[0] + tmp[2], tmp[1] + tmp[3]]
 
         self.performance_overall[:, 0] += np.array(result + early + lick)
+        self.performance_overall[:4, 1] = self.performance_overall[:4, 0] / self.trial_num
         if lr[0] > 0:
             self.performance_overall[5, 1] = self.performance_overall[5, 0] / lr[0]
             self.performance_overall[7, 1] = self.performance_overall[5, 0] / lr[0]
