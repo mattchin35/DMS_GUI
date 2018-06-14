@@ -12,7 +12,7 @@ from dms_training_window_mod import Ui_trainingWindow
 from dms_model_nodaq import DMSModel as Model
 import pyqtgraph as pg
 skipStartUi = 1
-
+#quick test
 #   INITIALIZE START UI
 class Controller(QObject):
 
