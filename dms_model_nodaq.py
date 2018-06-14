@@ -77,6 +77,7 @@ class DMSModel(QObject):
         self.prev_trial = np.zeros(3)
         self.strict_ub = 10  # number of trials before the program switches trials automatically
         self.correct_choice = 0
+        self.min_trial_to_auto = np.array([30, 30])  # number of trials to check before auto change. 0 alt, 1 random
 
         # User options
         self.random = False
@@ -205,6 +206,15 @@ class DMSModel(QObject):
             self.trial_type_progress *= 0
             self.set_trial_hi()
 
+        if self.automate:
+            trange = self.min_trial_to_auto[0]
+            if self.trial_num >= trange:
+                trials_in_range = self.trial_correct_history[(len(self.trial_correct_history)-trange)
+                                                                :len(self.trial_correct_history)]
+                recent_avg = collections.Counter(trials_in_range)[0] / trange
+                if recent_avg >= .8:
+                    self.random = True
+
     def choose_random_trial(self):
         """
         Choose the next random trial to run. A trial type is selected and set to run
@@ -224,6 +234,15 @@ class DMSModel(QObject):
 
             self.trial_type_progress *= 0
             self.set_trial_hi()
+
+        if self.automate:
+            trange = self.min_trial_to_auto[1]
+            if self.trial_num >= trange:
+                trials_in_range = self.trial_correct_history[(len(self.trial_correct_history) - trange)
+                                                             :len(self.trial_correct_history)]
+                recent_avg = collections.Counter(trials_in_range)[0] / trange
+                if recent_avg <= .8:
+                    self.random = False
 
     def set_trial_hi(self):
         """Make the above code less wordy with this shortcut."""

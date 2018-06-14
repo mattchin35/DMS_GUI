@@ -12,7 +12,6 @@ from dms_training_window_mod import Ui_trainingWindow
 from dms_model_nodaq import DMSModel as Model
 import pyqtgraph as pg
 skipStartUi = 1
-
 #   INITIALIZE START UI
 class Controller(QObject):
 
@@ -96,6 +95,7 @@ class Controller(QObject):
         self.trainingUi.trialStructureComboBox.currentTextChanged.connect(self.changeTrialStruct)
         self.trainingUi.trialTypeComboBox.currentTextChanged.connect(self.changeTrialTypeMode)
         self.trainingUi.useUserProbComboBox.currentTextChanged.connect(self.changeProbSource)
+        self.trainingUi.automateComboBox.currentTextChanged.connect(self.changeAutomate)
 
         # MODEL SIGNALS
         self.model.startTrialSignal.connect(self.startTrialInputs)
@@ -221,6 +221,13 @@ class Controller(QObject):
             self.model.use_user_probs = False
         else:
             self.model.use_user_probs = True
+
+    def changeAutomate(self):
+        type = self.trainingUi.automateComboBox.currentText()
+        if type == 'Manual':
+            self.model.automate = False
+        else:
+            self.model.automate = True
 
     def startTrialInputs(self):
         print('Trial: {}'.format(self.model.trial_num))
