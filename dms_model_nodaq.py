@@ -1,12 +1,8 @@
 import time, random
 import numpy as np
-import pandas as pd
 import nidaqmx as ni
-import nidaqmx.system, nidaqmx.stream_readers, nidaqmx.stream_writers
 from nidaqmx.constants import LineGrouping
 from PyQt5.QtCore import QDate, QTime, QDateTime, Qt, pyqtSignal, pyqtSlot, QObject
-from PyQt5.QtWidgets import *
-from PyQt5.QtGui import QIcon, QFont
 import sys, os, csv, collections
 
 class LickSignal(QObject):
@@ -34,7 +30,6 @@ class DMSModel(QObject):
     startTrialSignal = pyqtSignal()
     endTrialSignal = pyqtSignal()
     endProgramSignal = pyqtSignal()
-    intReady = pyqtSignal(int)
     intervalTime = pyqtSignal(float)
 
     def __init__(self):
@@ -49,7 +44,7 @@ class DMSModel(QObject):
         self.allChoices = []
         self.indicator = np.array([[False], [False]])
         self.prev_indicator = np.array([[False], [False]])
-        self.performance_overall = np.zeros((9, 2))  # was 8 2
+        self.performance_overall = np.zeros((9, 2))
         # correct, error, switch, miss, early_lick, left, right, l reward, r reward
         # left column numbers, right column 
         self.performance_stimulus = np.zeros((self.num_trial_types, 7))
@@ -203,8 +198,7 @@ class DMSModel(QObject):
         if self.automate:
             trange = self.min_trial_to_auto[0]
             if self.trial_num >= trange:
-                trials_in_range = self.trial_correct_history[(len(self.trial_correct_history)-trange)
-                                                             :len(self.trial_correct_history)]
+                trials_in_range = self.trial_correct_history[len(self.trial_correct_history)-trange:]
                 recent_avg = collections.Counter(trials_in_range)[0] / trange
                 if recent_avg >= .8:
                     self.random = True
@@ -232,8 +226,7 @@ class DMSModel(QObject):
         if self.automate:
             trange = self.min_trial_to_auto[1]
             if self.trial_num >= trange:
-                trials_in_range = self.trial_correct_history[(len(self.trial_correct_history) - trange)
-                                                             :len(self.trial_correct_history)]
+                trials_in_range = self.trial_correct_history[len(self.trial_correct_history) - trange:]
                 recent_avg = collections.Counter(trials_in_range)[0] / trange
                 if recent_avg <= .8:
                     self.random = False
@@ -332,8 +325,9 @@ class DMSModel(QObject):
         return early
 
     def write(self):  # a cleaner function to call
-        # self.writer.write_one_sample_multi_line(self.output)
-        if USE_DAQ: self.out_task.write(self.output)
+        if USE_DAQ:
+            self.out_task.write(self.output)
+            # self.writer.write_one_sample_multi_line(self.output)
 
     def determine_choice(self):
         """Determine whether the mouse has chosen left or right."""
@@ -356,13 +350,10 @@ class DMSModel(QObject):
         self.write()
 
         t = 0
-        # while t <= self.response_window:
         while t <= self.timing[self.cur_stage]:
             time.sleep(.001)
             t = time.time() - st
-            self.total_time[self.cur_stage - 2] = t
             self.intervalTime.emit(t)
-
             self.update_indicator()
             sum_ind = np.sum(self.indicator)
             if np.sum(sum_ind > 1):
@@ -437,6 +428,10 @@ class DMSModel(QObject):
             writer = csv.writer(f)
             writer.writerows(self.licking_export)
 
+    def refresh_save(self):
+        self.events_file = self.save_path + '/' + self.mouse + '_events'
+        self.licking_file = self.save_path + '/' + self.mouse + '_licking'
+
     def refresh_metrics(self):
         """Refresh performance metrics for when a new mouse or new directory is chosen."""
         # performance
@@ -470,7 +465,6 @@ class DMSModel(QObject):
             return
         else:
             self.probabilities = self.softmax(p)
-            print("Probabilities: ", self.probabilities)
 
     def prepare_plot_data(self, choice):
         if choice == 0:
@@ -515,6 +509,25 @@ class DMSModel(QObject):
             self.performance_overall[6, 1] = self.performance_overall[6, 0] / lr[1]
             self.performance_overall[8, 1] = self.performance_overall[8, 0] / lr[1]
 
+    def file_io(self):
+        if self.events_file == '':
+            print("You must specify a save folder.")
+            return
+
+        if not os.path.isfile(self.events_file):
+            print(os.path.isfile(self.events_file))
+            with open(self.events_file, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(['trial_no.', 'trial_type', 'perfect', 'correct', 'error', 'switch',
+                                 'miss', 'early_lick', 'left', 'right', 'L_reward', 'R_reward', 'ITI_start',
+                                 'trial_start', 'stimulus_start', '1st_odor_onset', 'delay_onset',
+                                 '2nd_odor_onset', '2nd_delay_onset', 'Go_tone', 'effective_lick',
+                                 'L_reward', 'R_reward', 'noise_onset', 'trial_end'])
+
+            with open(self.licking_file, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(['timestamp', 'left', 'right'])
+
     @staticmethod
     def softmax(x):
         """
@@ -529,30 +542,12 @@ class DMSModel(QObject):
     def run_program(self):
         """Run the training program until the controller stops it."""
         # set the next trial
-        # if self.automate:
-            # check the percent correct
-
         self.run = True
         choice = 0
         early = [0]
         while self.run:
             # File I/O
-            if self.events_file == '':
-                print("You must specify a save folder.")
-                return
-
-            if not os.path.isfile(self.events_file):
-                with open(self.events_file, 'w', newline='') as f:
-                    writer = csv.writer(f)
-                    writer.writerow(['trial_no.', 'trial_type', 'perfect', 'correct', 'error', 'switch',
-                                     'miss', 'early_lick', 'left', 'right', 'L_reward', 'R_reward', 'ITI_start',
-                                     'trial_start', 'stimulus_start', '1st_odor_onset', 'delay_onset',
-                                     '2nd_odor_onset', '2nd_delay_onset', 'Go_tone', 'effective_lick',
-                                     'L_reward', 'R_reward', 'noise_onset', 'trial_end'])
-
-                with open(self.licking_file, 'w', newline='') as f:
-                    writer = csv.writer(f)
-                    writer.writerow(['timestamp', 'left', 'right'])
+            self.file_io()
 
             time.sleep(.001)  # need sleep time for graph
             self.total_time *= 0
@@ -563,7 +558,6 @@ class DMSModel(QObject):
 
             self.correct_choice = self.trial_type % 2
             self.trial_type_history.append(self.trial_type)
-            # print(self.trial_type_history)
             self.trial_type_progress[1] += 1
             self.trial_num += 1
             self.trialArray.append(self.trial_num)
@@ -599,7 +593,6 @@ class DMSModel(QObject):
             self.cur_stage += 1  # 3
             times[t_idx] = time.perf_counter()  # delay start
             t_idx += 1
-            # self.run_interval(self.delay)
             self.run_interval(self.timing[self.cur_stage])
 
             # print('odor2')
@@ -637,7 +630,6 @@ class DMSModel(QObject):
             self.update_performance(choice, result, early, lick)
 
             # consumption time
-            # self.run_interval(self.consumption_time)
             self.run_interval(self.timing[-1])  # consumption time is last
 
             self.prepare_plot_data(choice)
@@ -654,9 +646,9 @@ class DMSModel(QObject):
             print('overall\n', self.performance_overall)
             print('Events:\n', events)
             print('Licking:\n', self.licking_export)
-            print(len(perfect), len(result), len(early), len(lick))
             self.licking_export = []
             if self.refresh:
+                self.refresh_save()
                 self.refresh_metrics()
                 self.refresh = False
 

@@ -247,7 +247,7 @@ class Controller(QObject):
             print("metric data has been refreshed due to mouse change")
 
         self.model.mouse = self.trainingUi.curAnimalLineEdit.text()
-        self.refreshSaveFiles()
+        self.refresh()
 
     def timingEditChanges(self, idx):
         try:
@@ -345,7 +345,8 @@ class Controller(QObject):
         current_trial = self.model.trial_num
 
         #   Trial-by-Trial Graphic
-        self.pg_trialByTrial.plot(self.model.correct_trials[0], self.model.correct_trials[1], pen=None, symbol='o', symbolBrush='g', clear=True)
+        self.pg_trialByTrial.plot(clear=True)
+        self.pg_trialByTrial.plot(self.model.correct_trials[0], self.model.correct_trials[1], pen=None, symbol='o', symbolBrush='g')
         self.pg_trialByTrial.plot(self.model.error_trials[0], self.model.error_trials[1], pen=None, symbol='o', symbolBrush='r')
         self.pg_trialByTrial.plot(self.model.switch_trials[0], self.model.switch_trials[1], pen=None, symbol='o', symbolBrush='y')
         self.pg_trialByTrial.plot(self.model.miss_trials[0], self.model.miss_trials[1], pen=None, symbol='o', symbolBrush='w')
@@ -376,9 +377,8 @@ class Controller(QObject):
         # QApplication.clipboard().setImage(screenshot)
 
     def chooseDirInStart(self):
-        self.chosendir = QFileDialog.getExistingDirectory(None, 'Select a folder:', 'C:\\', QFileDialog.ShowDirsOnly)
-        self.startUi.pathLineEdit.setText(self.chosendir)
-        return self.chosendir
+        chosendir = QFileDialog.getExistingDirectory(None, 'Select a folder:', 'C:\\', QFileDialog.ShowDirsOnly)
+        self.startUi.pathLineEdit.setText(chosendir)
 
     def changeDirTraining(self):
         new_dir = QFileDialog.getExistingDirectory(None, 'Select a folder:', 'C:\\', QFileDialog.ShowDirsOnly)
@@ -391,7 +391,7 @@ class Controller(QObject):
 
         self.trainingUi.curPathLineEdit.setText(new_dir)
         self.model.save_path = new_dir
-        self.refreshSaveFiles()
+        self.refresh()
 
     def changeErrorTO(self):
         try:
@@ -405,14 +405,13 @@ class Controller(QObject):
         except:
             self.invalidInputMsg()
 
-    def refreshSaveFiles(self):
-        self.model.events_file = self.model.save_path + '/' + self.model.mouse + '_events'
-        self.model.licking_file = self.model.save_path + '/' + self.model.mouse + '_licking'
+    def refresh(self):
+        if not self.model.run:
+            self.model.refresh_save()
 
         self.pg_trialByTrial.plot(clear=True)
         self.pg_correctP.plot(clear=True)
         self.pg_bias.plot(clear=True)
-
 
     def invalidInputMsg(self):
         msg = QErrorMessage()
