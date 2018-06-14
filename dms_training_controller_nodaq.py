@@ -129,7 +129,9 @@ class Controller(QObject):
         self.trainingUi.baLowerLineEdit.returnPressed.connect(lambda: self.lbEditChanges(3))
 
         self.trainingUi.errorTOLineEdit.returnPressed.connect(lambda: self.changeErrorTO())
+        self.trainingUi.errorTOLineEdit.setText("{}".format(self.model.timeout[1]))
         self.trainingUi.earlyLickTOLineEdit.returnPressed.connect(lambda: self.changeEarlyTO())
+        self.trainingUi.earlyLickTOLineEdit.setText("{}".format(self.model.early_timeout))
 
         self.trainingUi.minLicksLineEdit.returnPressed.connect(self.minLicksChanges)
 
@@ -233,7 +235,7 @@ class Controller(QObject):
         print('Trial: {}'.format(self.model.trial_num))
         self.trainingUi.trialNoTextBrowser.setText("{}".format(self.model.trial_num))
         self.trainingUi.trialTypeTextBrowser.setText(['AA', 'AB', 'BB', 'BA'][self.model.trial_type])
-        for i in range(self.model.num_odors):
+        for i in range(self.model.num_trial_types):
             self.autoProbability[i].setText("{:.2f}".format(self.model.probabilities[i]))
 
     def curAnimalChanges(self):
@@ -307,7 +309,7 @@ class Controller(QObject):
 
         self.trialType_table.setRowCount(self.model.performance_stimulus.shape[0])
         self.trialType_table.setColumnCount(self.model.performance_stimulus.shape[1])
-        self.trialType_table.resize(245, 117)
+        self.trialType_table.resize(350, 125)
 
         # set labels
         self.overall_table.setHorizontalHeaderLabels(['trials', 'rate   '])
@@ -330,17 +332,20 @@ class Controller(QObject):
 
         for i in range(overall_data.shape[0]):
             self.overall_table.setItem(i, 0, QTableWidgetItem(str(int(overall_data[i][0]))))  # trials
-            self.overall_table.setItem(i, 1, QTableWidgetItem(str(overall_data[i][1])))  # rate
+            self.overall_table.setItem(i, 1, QTableWidgetItem("{:.2f}".format(overall_data[i][1])))  # rate
 
         for i in range(trialType_data.shape[0]):
             for j in range(trialType_data.shape[1]):
-                self.trialType_table.setItem(i, j, QTableWidgetItem(str(int(trialType_data[i][j]))))
+                if j == 0:
+                    self.trialType_table.setItem(i, j, QTableWidgetItem(str(int(trialType_data[i][j]))))
+                else:
+                    self.trialType_table.setItem(i, j, QTableWidgetItem("{:.2f}".format(trialType_data[i][j])))
 
     def plot(self):
         current_trial = self.model.trial_num
 
         #   Trial-by-Trial Graphic
-        self.pg_trialByTrial.plot(self.model.correct_trials[0], self.model.correct_trials[1], pen=None, symbol='o', symbolBrush='g')
+        self.pg_trialByTrial.plot(self.model.correct_trials[0], self.model.correct_trials[1], pen=None, symbol='o', symbolBrush='g', clear=True)
         self.pg_trialByTrial.plot(self.model.error_trials[0], self.model.error_trials[1], pen=None, symbol='o', symbolBrush='r')
         self.pg_trialByTrial.plot(self.model.switch_trials[0], self.model.switch_trials[1], pen=None, symbol='o', symbolBrush='y')
         self.pg_trialByTrial.plot(self.model.miss_trials[0], self.model.miss_trials[1], pen=None, symbol='o', symbolBrush='w')
@@ -350,14 +355,14 @@ class Controller(QObject):
             self.pg_trialByTrial.setXRange(current_trial-30, current_trial, padding=None)
 
         #   Correct Performance
-        self.pg_correctP.plot(self.model.correct_avg, pen='g', symbol=None)
+        self.pg_correctP.plot(self.model.correct_avg, pen='g', symbol=None, clear=True)
         if current_trial < 301:
             self.pg_correctP.setXRange(0,300,padding=None)
         else:
             self.pg_correctP.setXRange(current_trial-300, current_trial, padding=None)
 
         #   Bias
-        self.pg_bias.plot(self.model.bias, pen='w', symbol=None)
+        self.pg_bias.plot(self.model.bias, pen='w', symbol=None, clear=True)
         if current_trial < 101:
             self.pg_bias.setXRange(0,100,padding=None)
         else:
@@ -387,7 +392,6 @@ class Controller(QObject):
         self.trainingUi.curPathLineEdit.setText(new_dir)
         self.model.save_path = new_dir
         self.refreshSaveFiles()
-        # self.model.refresh = True
 
     def changeErrorTO(self):
         try:
@@ -408,6 +412,7 @@ class Controller(QObject):
         self.pg_trialByTrial.plot(clear=True)
         self.pg_correctP.plot(clear=True)
         self.pg_bias.plot(clear=True)
+
 
     def invalidInputMsg(self):
         msg = QErrorMessage()
