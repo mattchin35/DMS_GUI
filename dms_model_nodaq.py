@@ -9,27 +9,19 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import QIcon, QFont
 import sys, os, csv, collections
 
-class LickSignal(QObject):
-    """A signal for when the lick indicator is updated."""
-    signal = pyqtSignal()
+TESTING = True
+if TESTING:
+    USE_DAQ = False
+else:
+    USE_DAQ = True
 
-
-class StartTrialSignal(QObject):
-    """A signal for when a trial is beginning."""
-    signal = pyqtSignal(int)
-
-
-class EndTrialSignal(QObject):
-    """A signal for when a full trial is complete."""
-    signal = pyqtSignal()
-
-
-USE_DAQ = False
 class DMSModel(QObject):
     """
     Model for the DMS training program. Will be adjusted to abstract
     repeated functions when moving to other programs.
     """
+
+#   Signals
     lickSignal = pyqtSignal()
     startTrialSignal = pyqtSignal()
     endTrialSignal = pyqtSignal()
@@ -96,8 +88,10 @@ class DMSModel(QObject):
         self.cur_stage = 0
         self.total_time = np.zeros(4)  # odor1, delay, odor2, response
         # iti, no lick, odor1, delay, odor2, response, consumption
-        self.timing = [.1] * 7  # for testing
-        # self.timing = [3, .4, .5, 1.5, .5, 3, 1]  # standard times
+        if TESTING:
+            self.timing = [.1] * 7  # for testing
+        else:
+            self.timing = [3, .4, .5, 1.5, .5, 3, 1]  # standard times
         self.early_lick_time = 0
         self.early_timeout = 6
         self.timeout = np.array([0, 5, 5, 0])  # timeout for error/switch
@@ -161,11 +155,6 @@ class DMSModel(QObject):
         self.water_daq = [lw, rw]
         self.output = [False] * 8
         time.perf_counter()
-
-        # create signals
-        # self.lickSignal = LickSignal()
-        # self.startTrialSignal = StartTrialSignal()
-        # self.endTrialSignal = EndTrialSignal()
 
     def update_indicator(self):
         self.prev_indicator = self.indicator.copy()
@@ -373,7 +362,6 @@ class DMSModel(QObject):
 
             # check if starting a new lick
             if not active and sum_ind == 1:
-                print('ADDED TO LICK')
                 active = True
                 licks += self.indicator
 
@@ -397,14 +385,21 @@ class DMSModel(QObject):
                 break
 
             # Testing
-            side = random.getrandbits(1)
-            if side == self.correct_choice:
-                choice = 0  # correct
-                self.give_water = True
-            else:
-                choice = 1  # error
-                self.give_water = False
-            break
+            if TESTING:
+                choice = random.randint(0, 3)
+                if choice == 0:
+                    self.give_water = True
+                else:
+                    self.give_water = False
+                break
+                # side = random.getrandbits(1)
+                # if side == self.correct_choice:
+                #     choice = 0  # correct
+                #     self.give_water = True
+                # else:
+                #     choice = 1  # error
+                #     self.give_water = False
+                # break
 
         self.trial_correct_history.append(choice)
         result[choice] = 1
@@ -650,18 +645,16 @@ class DMSModel(QObject):
             events += perfect + result + early + lick + times
             self.save(events)
             self.endTrialSignal.emit()
-            print('by stimulus:\n', self.performance_stimulus)
-            print('overall\n', self.performance_overall)
-            print('Events:\n', events)
-            print('Licking:\n', self.licking_export)
-            print(len(perfect), len(result), len(early), len(lick))
+            if TESTING:
+                print('by stimulus:\n', self.performance_stimulus)
+                print('overall\n', self.performance_overall)
+                print('Events:\n', events)
+                print('Licking:\n', self.licking_export)
+                print(len(perfect), len(result), len(early), len(lick))
             self.licking_export = []
             if self.refresh:
                 self.refresh_metrics()
                 self.refresh = False
-
-        # self.endProgramSignal.emit()
-
 
 if __name__ == '__main__':
     model = DMSModel()

@@ -12,11 +12,10 @@ from dms_training_window_mod import Ui_trainingWindow
 from dms_model_nodaq import DMSModel as Model
 import pyqtgraph as pg
 skipStartUi = 1
-#   INITIALIZE START UI
+
 class Controller(QObject):
 
     def __init__(self):
-        # super(controller, self).__init__(parent)
         super().__init__()
         # self.setupUi(self)
         # self.startUi = Ui_startWindow()
@@ -25,40 +24,31 @@ class Controller(QObject):
         self.thread = QThread()
         self.model.moveToThread(self.thread)
 
-        # if skipStartUi == 1:
-        #     self.showTrainingUi()
-        # else:
-        #     self.showStartUi()
-
         self.showTrainingUi()
 
-        # self.thread.started.connect(self.model.run_program)
-        # self.model.endProgramSignal.connect(self.thread.quit)
-
-    #   START UI [always the first window shown]
+#   START UI [not in use right now]
     def showStartUi(self):
         self.startUi.setupUi(self)
         self.startUi.goButton.clicked.connect(self.goButtonStartUi)
         self.startUi.dirButton.clicked.connect(self.chooseDirInStart)
         self.show()
 
-    #   GO BUTTON FOR START UI [separate func necessary so user can type into line edits]
+#   GO BUTTON FOR START UI [separate func necessary so user can type into line edits]
     def goButtonStartUi(self):
         programType = self.startUi.programLineEdit.text()
         if programType == 'training [default]' or programType == 'training'\
                 or programType == 'Training':
             self.startUi.goButton.clicked.connect(self.showTrainingUi)
 
-    #   TRAINING UI
+#   TRAINING UI
     def showTrainingUi(self):
+        """
+        TRAINING UI
+        """
         self.correct_avg = []
         self.bias = []
 
-        # Indicator colors
-        self.led_color = QColor(110, 255, 130)
-        self.led_off = QColor(0, 0, 0)
-
-        # Autofills
+#   AUTOFILLS
         self.trainingUi.curAnimalLineEdit.setText(self.model.mouse)
         self.trainingUi.curPathLineEdit.setText(self.model.save_path)
 
@@ -66,24 +56,24 @@ class Controller(QObject):
                                   self.trainingUi.odor1LineEdit, self.trainingUi.delay1LineEdit,
                                   self.trainingUi.odor2LineEdit, self.trainingUi.responseWindowLineEdit,
                                   self.trainingUi.consumptionTimeLineEdit]
-        for i in range(7):
+        for i in range(len(self.timeLineEditBoxes)):
             self.timeLineEditBoxes[i].setText(str(self.model.timing[i]))
 
         self.ubLineEdit = [self.trainingUi.aaUpperLineEdit, self.trainingUi.abUpperLineEdit,
                    self.trainingUi.bbUpperLineEdit, self.trainingUi.baUpperLineEdit]
-        for i in range(4):
+        for i in range(len(self.ubLineEdit)):
             self.ubLineEdit[i].setText(str(int(self.model.hi_bounds[i])))
 
         self.lbLineEdit = [self.trainingUi.aaLowerLineEdit, self.trainingUi.abLowerLineEdit,
                    self.trainingUi.bbLowerLineEdit, self.trainingUi.baLowerLineEdit]
-        for i in range(4):
+        for i in range(len(self.lbLineEdit)):
             self.lbLineEdit[i].setText(str(int(self.model.low_bounds[i])))
 
         self.trainingUi.minLicksLineEdit.setText(str(int(self.model.min_licks)))
         self.trainingUi.leftWaterAmountLineEdit.setText(str(float(self.model.water_times[0])))
         self.trainingUi.rightWaterAmountLineEdit.setText(str(float(self.model.water_times[1])))
 
-        # BUTTON SIGNALS
+#   BUTTON SIGNALS
         # self.trainingUi.backButton.clicked.connect(self.showStartUi)
         self.trainingUi.changePathButton.clicked.connect(self.changeDirTraining)
         self.trainingUi.startButton.clicked.connect(self.model.run_program)
@@ -91,13 +81,13 @@ class Controller(QObject):
         # self.trainingUi.changeAnimalButton.clicked.connect(self.changeMouse)  # use lineEdit.returnPressed
         self.trainingUi.giveWaterButton.clicked.connect(self.giveWater)
 
-        # DROPDOWN LISTS
+#   DROPDOWN LISTS
         self.trainingUi.trialStructureComboBox.currentTextChanged.connect(self.changeTrialStruct)
         self.trainingUi.trialTypeComboBox.currentTextChanged.connect(self.changeTrialTypeMode)
         self.trainingUi.useUserProbComboBox.currentTextChanged.connect(self.changeProbSource)
         self.trainingUi.automateComboBox.currentTextChanged.connect(self.changeAutomate)
 
-        # MODEL SIGNALS
+#   MODEL SIGNALS
         self.model.startTrialSignal.connect(self.startTrialInputs)
         self.model.endTrialSignal.connect(self.endTrialInputs)
         self.model.intervalTime.connect(self.timeDisplay)
@@ -107,7 +97,7 @@ class Controller(QObject):
                           self.trainingUi.odor2TextBrowser, self.trainingUi.responseWindowTextBrowser,
                           self.trainingUi.totalStimulusTextBrowser]
 
-        # USER INPUT CALLBACKS
+#   USER INPUT CALLBACKS
         self.trainingUi.curAnimalLineEdit.returnPressed.connect(self.curAnimalChanges)
 
         self.timeLineEditBoxes[0].returnPressed.connect(lambda: self.timingEditChanges(0))
@@ -137,20 +127,22 @@ class Controller(QObject):
 
         self.autoProbability = [self.trainingUi.aaProbabilityTextBrowser, self.trainingUi.abProbabilityTextBrowser,
                                 self.trainingUi.bbProbabilityTextBrowser, self.trainingUi.baProbabilityTextBrowser]
-        for i in range(4):
+        for i in range(len(self.autoProbability)):
             self.autoProbability[i].setText("{:.2f}".format(self.model.probabilities[i]))
 
         self.customProbability = [self.trainingUi.aaProbabilityLineEdit, self.trainingUi.abProbabilityLineEdit,
                                   self.trainingUi.bbProbabilityLineEdit, self.trainingUi.baCustomProbabilityTextBrowser]
-        for i in range(4):
+        for i in range(len(self.customProbability)):
             self.customProbability[i].setText("{:.2f}".format(self.model.user_probabilities[i]))
 
         self.trainingUi.aaProbabilityLineEdit.returnPressed.connect(lambda: self.probEditChanges(0))
         self.trainingUi.abProbabilityLineEdit.returnPressed.connect(lambda: self.probEditChanges(1))
         self.trainingUi.bbProbabilityLineEdit.returnPressed.connect(lambda: self.probEditChanges(2))
 
-        self.changeTrialStruct()
-        self.setDataTables()
+
+#   GRAPHICS
+        self.led_color = QColor(110, 255, 130)
+        self.led_off = QColor(0, 0, 0)
 
         self.pg_trialByTrial = self.trainingUi.trialByTrialGraphic
         self.pg_correctP = self.trainingUi.correctTrialsGraphic
@@ -163,18 +155,16 @@ class Controller(QObject):
         self.pg_trialByTrial.setYRange(0, 3, padding=None)
         self.pg_correctP.setYRange(0, 100, padding=None)
 
-        # self.trialByTrialData = self.pg_trialByTrial.plot()
-
-        # self.model.startTrialSignal.signal.connect(self.startTrialInputs)
-        # self.model.endTrialSignal.signal.connect(self.endTrialInputs)
-
         self.trainingUi.leftLickIndicatorWidget.setStyleSheet(
             "QWidget { background-color: %s}" % self.led_off.name())
         self.trainingUi.rightLickIndicatorWidget.setStyleSheet(
             "QWidget { background-color: %s}" % self.led_off.name())
 
+        self.changeTrialStruct()
+        self.setDataTables()
+
         self.thread.start()
-        self.trainingUi.mainWindow.show() 
+        self.trainingUi.mainWindow.show()
 
     def lickIndicator(self):
         ind = self.model.indicator.flatten()
@@ -202,7 +192,6 @@ class Controller(QObject):
 
     def changeTrialTypeMode(self):
         trial_type = self.trainingUi.trialTypeComboBox.currentText()
-        # self.trainingUi.trialTypeTextBrowser.setText(self.curTrialTypeMode)
         if trial_type == 'Full':
             self.model.structure = 2
         elif trial_type == 'AA/AB':
@@ -241,7 +230,6 @@ class Controller(QObject):
     def curAnimalChanges(self):
         if self.model.mouse == self.trainingUi.curAnimalLineEdit.text():
             return
-
         if self.model.mouse:  # must come before model.mouse is changed
             self.model.refresh = True
             print("metric data has been refreshed due to mouse change")
@@ -270,6 +258,18 @@ class Controller(QObject):
     def minLicksChanges(self):
         try:
             self.model.min_licks = int(self.trainingUi.minLicksLineEdit.text())
+        except:
+            self.invalidInputMsg()
+
+    def changeErrorTO(self):
+        try:
+            self.model.timeout[1:3] = int(self.trainingUi.errorTOLineEdit.text())
+        except:
+            self.invalidInputMsg()
+
+    def changeEarlyTO(self):
+        try:
+            self.model.early_timeout = int(self.trainingUi.earlyLickTOLineEdit.text())
         except:
             self.invalidInputMsg()
 
@@ -384,7 +384,6 @@ class Controller(QObject):
         new_dir = QFileDialog.getExistingDirectory(None, 'Select a folder:', 'C:\\', QFileDialog.ShowDirsOnly)
         if new_dir == self.model.save_path:
             return
-
         if self.model.save_path:  # must come first
             self.model.refresh = True
             print("metric data has been refreshed due to directory change")
@@ -392,18 +391,6 @@ class Controller(QObject):
         self.trainingUi.curPathLineEdit.setText(new_dir)
         self.model.save_path = new_dir
         self.refreshSaveFiles()
-
-    def changeErrorTO(self):
-        try:
-            self.model.timeout[1:3] = int(self.trainingUi.errorTOLineEdit.text())
-        except:
-            self.invalidInputMsg()
-
-    def changeEarlyTO(self):
-        try:
-            self.model.early_timeout = int(self.trainingUi.earlyLickTOLineEdit.text())
-        except:
-            self.invalidInputMsg()
 
     def refreshSaveFiles(self):
         self.model.events_file = self.model.save_path + '/' + self.model.mouse + '_events'
