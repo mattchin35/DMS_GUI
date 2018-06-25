@@ -165,10 +165,6 @@ class Ui_trainingWindow:
         self.giveWaterButton.setGeometry(QtCore.QRect(190, 430, 112, 34))
         self.giveWaterButton.setObjectName("giveWaterButton")
 
-        self.changeAnimalButton = QtWidgets.QPushButton(self.centralwidget)
-        self.changeAnimalButton.setGeometry(QtCore.QRect(970, 30, 51, 21))
-        self.changeAnimalButton.setObjectName("changeAnimalButton")
-
         self.changePathButton = QtWidgets.QPushButton(self.centralwidget)
         self.changePathButton.setGeometry(QtCore.QRect(1480, 30, 51, 21))
         self.changePathButton.setObjectName("changePathButton")
@@ -650,7 +646,6 @@ class Ui_trainingWindow:
         self.minLicksLabel.setText(_translate("MainWindow", "Minimum Licks:"))
         self.stimulusBoundsLabel.setText(_translate("MainWindow", "Stimulus Bounds"))
         self.trialStructureLabel.setText(_translate("MainWindow", "Trial Structure"))
-        self.changeAnimalButton.setText(_translate("MainWindow", "change"))
         self.changePathButton.setText(_translate("MainWindow", "change"))
         self.backButton.setText(_translate("MainWindow", "back"))
         self.stopButton.setText(_translate("MainWindow", "stop"))
