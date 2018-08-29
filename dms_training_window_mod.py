@@ -655,7 +655,6 @@ class Ui_trainingWindow:
         self.minLicksLabel.setText(_translate("MainWindow", "Minimum Licks:"))
         self.stimulusBoundsLabel.setText(_translate("MainWindow", "Stimulus Bounds"))
         self.trialStructureLabel.setText(_translate("MainWindow", "Trial Structure"))
-        self.changeAnimalButton.setText(_translate("MainWindow", "change"))
         self.changePathButton.setText(_translate("MainWindow", "change"))
         self.backButton.setText(_translate("MainWindow", "back"))
         self.stopButton.setText(_translate("MainWindow", "stop"))

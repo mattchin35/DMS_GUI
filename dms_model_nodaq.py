@@ -267,14 +267,15 @@ class DMSModel(QObject):
         """A generic delay between stages of the task."""
         st = time.time()
         t = 0
+        if self.cur_stage == 0:
+            self.output = self.light
+            self.write()
+
         while t < delay:
             time.sleep(.001)
             t = time.time() - st
             self.update_indicator()
-            if self.cur_stage == 0:
-                self.output = self.light
-                self.write()
-            elif self.cur_stage == 3:
+            if self.cur_stage == 3:
                 # stimulus time is staggered by two indices - only delay uses this function during stimulus
                 self.total_time[self.cur_stage - 2] = t
 
@@ -311,6 +312,8 @@ class DMSModel(QObject):
         t = 0
         # while t < self.odor_times[cue]:
         early = [0]
+        self.output = list(self.trial_dict[self.trial_type][cue])
+        self.write()
         while t < self.timing[2 + cue*2]:
             # cue is 0 or 1; odor stages are 2 or 4
             time.sleep(.001)
@@ -318,8 +321,6 @@ class DMSModel(QObject):
             # stimulus time is staggered by two indices
             self.total_time[self.cur_stage - 2] = t
             self.intervalTime.emit(t)
-            self.output = list(self.trial_dict[self.trial_type][cue])
-            self.write()
             self.update_indicator()
 
             if cue == 1:
@@ -345,9 +346,9 @@ class DMSModel(QObject):
         side = -1
         # choice = 0 - correct, 1 - error, 2 - switch, 3 - miss
         self.output = self.go_cue
+        self.write()
         while t < .15:
             time.sleep(.001)
-            self.write()
             t = time.time() - st
             self.update_indicator() 
 
@@ -366,7 +367,7 @@ class DMSModel(QObject):
             sum_ind = np.sum(self.indicator)
             if np.sum(sum_ind > 1):
                 # error, licked both at the same time
-                self.overall[1, self.correct_choice] += 1
+                self.performance_overall[1, self.correct_choice] += 1
                 choice = 1
                 break  # continue?
 
@@ -418,10 +419,10 @@ class DMSModel(QObject):
     def deliver_water(self):
         """Deliver water, assuming the right choice was made."""
         st = time.time()
+        self.write()
         while (time.time() - st) < self.water_times[self.correct_choice]:
             self.update_indicator()
             self.output = list(self.water_daq[self.correct_choice])
-            self.write()
         print('water delivered')
         self.output = list(self.all_low)
         self.write()
