@@ -103,7 +103,6 @@ class Ui_trainingWindow:
         self.baProbabilityTextBrowser.setGeometry(QtCore.QRect(270, 140, 41, 31))
         self.baProbabilityTextBrowser.setObjectName("baProbabilityTextBrowser")
 
-
 #   GRAPHICS
         self.leftLickIndicatorWidget = QtWidgets.QWidget(self.currentStatusGroup)
         self.leftLickIndicatorWidget.setGeometry(QtCore.QRect(290, 50, 61, 51))
@@ -158,23 +157,27 @@ class Ui_trainingWindow:
 
 #   BUTTONS
         self.startButton = QtWidgets.QPushButton(self.centralwidget)
-        self.startButton.setGeometry(QtCore.QRect(510, 10, 211, 51))
+        self.startButton.setGeometry(QtCore.QRect(680, 10, 211, 51))
         self.startButton.setObjectName("startButton")
 
         self.giveWaterButton = QtWidgets.QPushButton(self.controlsGroup)
         self.giveWaterButton.setGeometry(QtCore.QRect(190, 430, 112, 34))
         self.giveWaterButton.setObjectName("giveWaterButton")
 
+        self.changeAnimalButton = QtWidgets.QPushButton(self.centralwidget)
+        self.changeAnimalButton.setGeometry(QtCore.QRect(900, 40, 51, 21))
+        self.changeAnimalButton.setObjectName("changeAnimalButton")
+
         self.changePathButton = QtWidgets.QPushButton(self.centralwidget)
-        self.changePathButton.setGeometry(QtCore.QRect(1480, 30, 51, 21))
+        self.changePathButton.setGeometry(QtCore.QRect(1100, 40, 51, 21))
         self.changePathButton.setObjectName("changePathButton")
 
         self.backButton = QtWidgets.QPushButton(self.centralwidget)
-        self.backButton.setGeometry(QtCore.QRect(410, 20, 71, 31))
+        self.backButton.setGeometry(QtCore.QRect(590, 20, 71, 31))
         self.backButton.setObjectName("backButton")
 
         self.stopButton = QtWidgets.QPushButton(self.centralwidget)
-        self.stopButton.setGeometry(QtCore.QRect(310, 20, 71, 31))
+        self.stopButton.setGeometry(QtCore.QRect(500, 20, 71, 31))
         self.stopButton.setObjectName("stopButton")
 
 #   TABLES
@@ -232,11 +235,11 @@ class Ui_trainingWindow:
         self.bbLowerLineEdit.setObjectName("bbLowerLineEdit")
 
         self.curAnimalLineEdit = QtWidgets.QLineEdit(self.centralwidget)
-        self.curAnimalLineEdit.setGeometry(QtCore.QRect(870, 20, 81, 31))
+        self.curAnimalLineEdit.setGeometry(QtCore.QRect(1010, 20, 81, 31))
         self.curAnimalLineEdit.setObjectName("curAnimalLineEdit")
 
         self.curPathLineEdit = QtWidgets.QLineEdit(self.centralwidget)
-        self.curPathLineEdit.setGeometry(QtCore.QRect(1150, 20, 311, 31))
+        self.curPathLineEdit.setGeometry(QtCore.QRect(1200, 20, 311, 31))
         self.curPathLineEdit.setObjectName("curPathLineEdit")
 
         self.itiLineEdit = QtWidgets.QLineEdit(self.centralwidget)
@@ -318,6 +321,12 @@ class Ui_trainingWindow:
         self.trialTimelineComboBox.addItem("")
         self.trialTimelineComboBox.addItem("")
         self.trialTimelineComboBox.addItem("")
+
+        self.taskTypeComboBox = QtWidgets.QComboBox(self.centralwidget)
+        self.taskTypeComboBox.setGeometry(QtCore.QRect(400, 20, 91, 31))
+        self.taskTypeComboBox.setObjectName("taskTypeComboBox")
+        self.taskTypeComboBox.addItem("")
+        self.taskTypeComboBox.addItem("")
 
 #   LABELS
         self.lickIndicatorLabel = QtWidgets.QLabel(self.currentStatusGroup)
@@ -481,7 +490,7 @@ class Ui_trainingWindow:
         self.trialTimelineLabel.setObjectName("trialTimelineLabel")
 
         self.currentAnimalLabel = QtWidgets.QLabel(self.centralwidget)
-        self.currentAnimalLabel.setGeometry(QtCore.QRect(760, 10, 111, 41))
+        self.currentAnimalLabel.setGeometry(QtCore.QRect(900, 5, 111, 41))
         font = QtGui.QFont()
         font.setPointSize(10)
         font.setBold(True)
@@ -491,7 +500,7 @@ class Ui_trainingWindow:
         self.currentAnimalLabel.setObjectName("currentAnimalLabel")
 
         self.currentPathLabel = QtWidgets.QLabel(self.centralwidget)
-        self.currentPathLabel.setGeometry(QtCore.QRect(1050, 10, 91, 41))
+        self.currentPathLabel.setGeometry(QtCore.QRect(1100, 5, 91, 41))
         font = QtGui.QFont()
         font.setPointSize(10)
         font.setBold(True)
@@ -679,6 +688,8 @@ class Ui_trainingWindow:
         self.automateComboBox.setItemText(0, _translate("MainWindow", "Manual"))
         self.automateComboBox.setItemText(1, _translate("MainWindow", "Automate"))
         self.automateLabel.setText(_translate("MainWindow", "Control Type"))
+        self.taskTypeComboBox.setItemText(0, _translate("MainWindow", "Training"))
+        self.taskTypeComboBox.setItemText(1, _translate("MainWindow", "ITS"))
 
 if __name__ == "__main__":
     import sys

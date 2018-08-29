@@ -8,8 +8,10 @@ from PyQt5.QtCore import QDate, QTime, QDateTime, Qt, pyqtSignal, pyqtSlot, QObj
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import QIcon, QFont
 import sys, os, csv, collections
+import thorlabs_apt as apt
 
 TESTING = True
+
 if TESTING:
     USE_DAQ = False
 else:
@@ -31,7 +33,9 @@ class DMSModel(QObject):
 
     def __init__(self):
         super().__init__()
+        self.taskType = 'Training'
         self.num_trial_types = 4
+
 
         # performance
         self.trial_num = 0
@@ -155,6 +159,12 @@ class DMSModel(QObject):
         self.water_daq = [lw, rw]
         self.output = [False] * 8
         time.perf_counter()
+
+        self.lickSideCounter = [0]*2
+
+        # MOTOR
+        devices = apt.list_available_devices()
+        self.curMotor = apt.Motor(devices[0][1])
 
     def update_indicator(self):
         self.prev_indicator = self.indicator.copy()
@@ -387,7 +397,7 @@ class DMSModel(QObject):
 
             # Testing
             if TESTING:
-                choice = random.randint(0, 3)
+                choice = random.randint(0, 1)
                 if choice == 0:
                     self.give_water = True
                 else:
@@ -569,6 +579,13 @@ class DMSModel(QObject):
             events = [self.trial_num, self.trial_type]
             times = ['NaN'] * 13
 
+            # ITI motor
+            if self.taskType == 'ITS':
+                if self.lickSideCounter[0] == 2 or self.lickSideCounter[1] == 2:
+                    sideLicked = self.lickSideCounter.index(max(self.lickSideCounter))
+                    ITS.moveMotor(sideLicked)
+                    self.lickSideCounter = [0] * 2
+
             # trial structure
             # print('iti')
             self.cur_stage = 0
@@ -620,6 +637,7 @@ class DMSModel(QObject):
             lick = [0] * 4
             if side != -1:
                 lick[side] = 1
+                self.lickSideCounter[side] += 1
 
             if self.give_water:  # aka choice = 1
                 self.trial_type_progress[0] += 1
@@ -656,6 +674,17 @@ class DMSModel(QObject):
             if self.refresh:
                 self.refresh_metrics()
                 self.refresh = False
+
+class ITS(QObject):
+    def __init__(self):
+        super().__init__()
+        self.motor = DMSModel.curMotor
+    def moveMotor(self,sideLicked):
+        if sideLicked == 0:
+            self.motor.move_by(.8)
+        else:
+            self.motor.move_by(-.8)
+
 
 if __name__ == '__main__':
     model = DMSModel()

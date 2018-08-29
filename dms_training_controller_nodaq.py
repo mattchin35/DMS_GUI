@@ -45,6 +45,7 @@ class Controller(QObject):
         """
         TRAINING UI
         """
+        self.uiType = 'trainingUi'
         self.correct_avg = []
         self.bias = []
 
@@ -86,6 +87,7 @@ class Controller(QObject):
         self.trainingUi.trialTypeComboBox.currentTextChanged.connect(self.changeTrialTypeMode)
         self.trainingUi.useUserProbComboBox.currentTextChanged.connect(self.changeProbSource)
         self.trainingUi.automateComboBox.currentTextChanged.connect(self.changeAutomate)
+        self.trainingUi.taskTypeComboBox.currentTextChanged.connect(self.changeTaskType)
 
 #   MODEL SIGNALS
         self.model.startTrialSignal.connect(self.startTrialInputs)
@@ -219,6 +221,9 @@ class Controller(QObject):
             self.model.automate = False
         else:
             self.model.automate = True
+
+    def changeTaskType(self):
+        self.model.taskType = self.trainingUi.taskTypeComboBox.currentText()
 
     def startTrialInputs(self):
         print('Trial: {}'.format(self.model.trial_num))
