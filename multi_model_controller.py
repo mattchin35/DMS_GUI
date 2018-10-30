@@ -16,13 +16,12 @@ import nidaqmx as ni
 import nidaqmx.system, nidaqmx.stream_readers, nidaqmx.stream_writers
 from nidaqmx.constants import LineGrouping
 import thorlabs_apt as apt
-
 skipStartUi = 1
 
 
 class Devices:
 
-    def __init__(self):
+    def __init__(self, moving_ports=True):
         self.out_task_0 = ni.Task()
         self.out_task_0.do_channels.add_do_chan('cDAQ2Mod1/port0/line0:7',
                                               line_grouping=LineGrouping.CHAN_PER_LINE)
@@ -46,19 +45,19 @@ class Devices:
         # MOTOR
         # if not self.testing:
         devices = apt.list_available_devices()
-        # print(devices)
-        motor_1 = apt.Motor(devices[0][1])
-        motor_2 = apt.Motor(devices[1][1])
-        self.motors = [motor_1, motor_2]
-        self.motors[1].move_to(self.motors[1].position+10)
-        self.motor_step = 10
+        motor_0 = apt.Motor(devices[0][1])
+        self.motors = [motor_0]
+        if moving_ports:
+            # print(devices)
+            motor_1 = apt.Motor(devices[1][1])
+            self.motors.append(motor_1)
+            self.motor_step = 10
 
     def motor_test(self, ix):
         # self.motors[ix].move_velocity(2)
         # self.motors[ix].move_by(10)
         print('posn', self.motors[ix].position)
         print('min posn', self.motors[ix].get_stage_axis_info())
-        self.motors[ix].set_stage_axis_info(-20., 100., 1, 1.)
         print('min posn', self.motors[ix].get_stage_axis_info())
         self.motors[ix].move_to(self.motors[ix].position+10)
         time.sleep(2)
@@ -76,7 +75,6 @@ class Devices:
         time.sleep(1)
         print('posn', self.motors[ix].position)
 
-        
 class Controller(QObject):
 
     def __init__(self):
@@ -87,6 +85,7 @@ class Controller(QObject):
         devices = Devices()
         dmsModel = DMSModel(devices, testing=False)
         itsModel = ITSModel(devices, testing=False)
+        dmsModel.motors[1].move_to(self.motors[1].position + 10)
         # dmsModel.motor_test(1)
         # devices.motor_test(1)
 
@@ -474,12 +473,6 @@ class Controller(QObject):
             ix = self.models[self.cur_model].delay_ix
             self.trainingUi.earlyLickCheckTimeLineEdit.setText("{:.3f}".format(self.models[self.cur_model].timing[ix]))
 
-        # n=300
-        # self.trainingUi.trialNoTextBrowser.setText(str(self.models[self.cur_model].trial_num))
-        # pos = np.random.normal(size=(2, n), scale=1e-5)
-        # spots = [{'pos': pos[:, i], 'data': 1} for i in range(n)] + [{'pos': [0, 0], 'data': 1}]
-        # self.trainingUi.trialByTrialGraphic.addPoints(spots)
-        # self.trainingUi.trialNoTextBrowser.setText(str(self.models[self.cur_model].trial_num))
         print('trial has ended')
 
     def setDataTables(self):

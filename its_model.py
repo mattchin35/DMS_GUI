@@ -15,8 +15,8 @@ class ITSModel(DMSModel):
     """A Python implementation of the ITS program. Primary changes are the addition of motor control,
     the lack of odor delivery, and the delivery of water for any choice of lick port."""
 
-    def __init__(self, devices, testing=False):
-        super().__init__(devices, testing)
+    def __init__(self, devices, testing=False, moving_ports=True):
+        super().__init__(devices, testing, moving_ports)
 
         # iti, no lick, response, consumption
         if self.testing:
@@ -133,28 +133,6 @@ class ITSModel(DMSModel):
         result[choice] = 1
         return choice, result, side
 
-    # def update_performance(self, choice, result, early, lick):
-    #     """Changes to DMS - only one trial type"""
-    #     # performance_stimulus
-    #     # num trials, % perfect, %correct, %error, %switch, %miss, %early
-    #     # get total number of a result, add 1 and divide by new total trial type
-    #     # multiply % of each result by total num
-    #     cnt = self.performance_stimulus[0, 1:] * self.performance_stimulus[0, 0]
-    #     self.performance_stimulus[0, 0] += 1
-    #     if choice == 0:
-    #         if early == 0:  # perfect
-    #             cnt[0] += 1
-    #         else:  # early lick
-    #             cnt[-1] += 1
-    #     cnt[1 + choice] += 1
-    #     self.performance_stimulus[self.trial_type, 1:] = cnt / self.performance_stimulus[self.trial_type, 0]
-    #
-    #     # performance_overall
-    #     # correct, error, switch, miss, early_lick, left, right, l reward, r reward
-    #     # left column numbers, right column percent
-    #     self.performance_overall[:, 0] += np.array(result + [early] + lick)
-    #     self.performance_overall[:, 1] = self.performance_overall[:, 0] / self.trial_num
-
     @pyqtSlot()
     def run_program(self):
         self.run = True
@@ -244,7 +222,8 @@ class ITSModel(DMSModel):
             # lick detection/response window
             self.cur_stage = 5
             # move ports to mouse
-            self.motor.move_by(5)
+            if self.moving_ports:
+                self.motors[1].move_by(-self.motor_step)
 
             times[t_idx] = time.perf_counter()  # go tone
             t_idx += 1
@@ -272,7 +251,9 @@ class ITSModel(DMSModel):
             # consumption time
             self.run_interval(self.timing[-1])  # consumption time is last
             # remove ports from mouse
-            self.motor.move_by(-5)
+            # remove ports from mouse
+            if self.moving_ports:
+                self.motors[1].move_by(self.motor_step)
 
             if early == 1:
                 # self.timing[self.delay_ix] = max(self.delay_min, self.timing[self.delay_ix] - self.delay_decrement)
