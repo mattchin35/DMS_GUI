@@ -15,7 +15,7 @@ class ITSModel(DMSModel):
     """A Python implementation of the ITS program. Primary changes are the addition of motor control,
     the lack of odor delivery, and the delivery of water for any choice of lick port."""
 
-    def __init__(self, devices, testing=False, moving_ports=True):
+    def __init__(self, devices, testing=False, moving_ports=True, lr_moving_ports=False):
         super().__init__(devices, testing, moving_ports)
 
         # iti, no lick, response, consumption
@@ -41,6 +41,8 @@ class ITSModel(DMSModel):
         self.delay_min = 0
         self.cur_delay = 0
         self.structure = 2
+        self.lr_moving_ports = lr_moving_ports
+        self.lick_side_counter = np.zeros(2)
 
     def its_delay(self):
         """A short delay to prepare the animal not to lick before the go cue."""
@@ -133,6 +135,21 @@ class ITSModel(DMSModel):
         result[choice] = 1
         return choice, result, side
 
+    def deliver_water(self, early, side):
+        """Deliver water, assuming the right choice was made."""
+        st = time.time()
+        early *= self.early_lick_check  # no water penalty if lick check is off
+        water_time = self.water_times[self.correct_choice + early*2]
+        self.output = list(self.water_daq[self.correct_choice])
+        self.write(0)
+        while (time.time() - st) < water_time:
+            self.update_indicator()
+            self.output = list(self.water_daq[side])
+
+        print('water delivered')
+        self.output = list(self.all_low)
+        self.write(0)
+
     @pyqtSlot()
     def run_program(self):
         self.run = True
@@ -188,31 +205,11 @@ class ITSModel(DMSModel):
             times[t_idx] = time.perf_counter()  # trial start
             t_idx += 1
             self.run_no_lick()
-            # self.run_interval(self.timing[self.cur_stage])  # no lick time removed for ITS?
 
             ## odor deliveries and delay removed for ITS - keep stages for .txt files
             # filler for stages 2, 3, 4 - entry filler for times[t_idx:t_idx + 4]
             times[t_idx:t_idx + 4] = [time.perf_counter()] * 4
             t_idx += 5  # skip idx+4, which is already NaN
-
-            """
-            # odor 1 filler
-            # self.cur_stage += 1  # 2
-            # times[t_idx:t_idx + 2] = [time.perf_counter()] * 2
-            # t_idx += 2  # stimulus and odor 1 start
-
-            # delay filler
-            # self.cur_stage += 1  # 3
-            # times[t_idx] = time.perf_counter()
-            # t_idx += 1
-
-            # odor 2 filler
-            # self.cur_stage += 1  # 4
-            # times[t_idx] = time.perf_counter()
-            # t_idx += 1
-            # times[t_idx] = 'NaN'
-            # t_idx += 1
-            """
 
             # ITS delay
             self.cur_stage = self.delay_ix
@@ -223,7 +220,7 @@ class ITSModel(DMSModel):
             self.cur_stage = 5
             # move ports to mouse
             if self.moving_ports:
-                self.motors[1].move_by(-self.motor_step)
+                self.devices.move_forward()
 
             times[t_idx] = time.perf_counter()  # go tone
             t_idx += 1
@@ -242,6 +239,14 @@ class ITSModel(DMSModel):
                 self.trial_type_progress[0] += 1
                 times[t_idx + side] = time.perf_counter()  # L/R reward
                 self.deliver_water(early)
+                trials_to_water_counter = 0
+                self.lick_side_counter[side] += 1
+            elif trials_to_water_counter >= self.trials_to_water:
+                trials_to_water_counter = 0
+                self.deliver_water(early)
+            else:
+                # increase trials-to-water counter
+                trials_to_water_counter += 1
 
             t_idx += 2
             self.give_water = False
@@ -251,15 +256,12 @@ class ITSModel(DMSModel):
             # consumption time
             self.run_interval(self.timing[-1])  # consumption time is last
             # remove ports from mouse
-            # remove ports from mouse
             if self.moving_ports:
-                self.motors[1].move_by(self.motor_step)
+                self.devices.move_backward()
 
             if early == 1:
-                # self.timing[self.delay_ix] = max(self.delay_min, self.timing[self.delay_ix] - self.delay_decrement)
                 self.timing[self.delay_ix] = max(self.delay_min, self.timing[self.delay_ix] - self.delay_adjust[0])
             else:
-                # self.timing[self.delay_ix] = min(self.delay_max, self.timing[self.delay_ix] + self.delay_increment)
                 self.timing[self.delay_ix] = min(self.delay_max, self.timing[self.delay_ix] + self.delay_adjust[1])
 
             t_idx += 1  # 'noise_onset'
@@ -280,11 +282,11 @@ class ITSModel(DMSModel):
                 self.refreshSignal.emit()
                 self.refresh = False
 
-        # if self.lickSideCounter[0] == 2 or self.lickSideCounter[1] == 2:
-        #     sideLicked = self.lickSideCounter.index(max(self.lickSideCounter))
-        #     ITS.moveMotor(sideLicked)
-        #     self.lickSideCounter = [0] * 2
-
+        if np.amax(self.lick_side_counter) >= 2 and self.lr_moving_ports:
+            side = self.lick_side_counter.argmax(self.lick_side_counter)
+            direction = 2 * side - 1  # map 0 to -1, 1 to 1 - reverse with (1-side) to switch directions
+            self.motors[0].move_by(direction * .8)
+            self.lick_side_counter *= 0
 
 
 if __name__ == '__main__':

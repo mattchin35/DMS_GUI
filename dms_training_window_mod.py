@@ -214,6 +214,10 @@ class Ui_trainingWindow:
         self.earlyRightWaterAmountLineEdit.setGeometry(QtCore.QRect(270, 530, 91, 31))
         self.earlyRightWaterAmountLineEdit.setObjectName("earlyRightWaterAmountLineEdit")
 
+        self.trialsToWaterLineEdit = QtWidgets.QLineEdit(self.controlsGroup)
+        self.trialsToWaterLineEdit.setGeometry(QtCore.QRect(310, 430, 51, 31))
+        self.trialsToWaterLineEdit.setObjectName("trialsToWaterLineEdit")
+
         self.minLicksLineEdit = QtWidgets.QLineEdit(self.controlsGroup)
         self.minLicksLineEdit.setGeometry(QtCore.QRect(30, 480, 51, 31))
         self.minLicksLineEdit.setObjectName("minLicksLineEdit")
@@ -318,6 +322,24 @@ class Ui_trainingWindow:
         self.abProbabilityLineEdit.setGeometry(QtCore.QRect(330, 110, 41, 31))
         self.abProbabilityLineEdit.setObjectName("abProbabilityLineEdit")
 
+        # (120, 40, 201, 211)
+        #     (1290, 700, 91, 21)
+        self.fastMotorStepLineEdit = QtWidgets.QLineEdit(self.centralwidget)
+        self.fastMotorStepLineEdit.setGeometry(QtCore.QRect(1400, 200, 41, 31))
+        self.fastMotorStepLineEdit.setObjectName("fastMotorStepLineEdit")
+
+        self.fastMotorSpeedLineEdit = QtWidgets.QLineEdit(self.centralwidget)
+        self.fastMotorSpeedLineEdit.setGeometry(QtCore.QRect(1450, 200, 41, 31))
+        self.fastMotorSpeedLineEdit.setObjectName("fastMotorSpeedLineEdit")
+
+        self.slowMotorStepLineEdit = QtWidgets.QLineEdit(self.centralwidget)
+        self.slowMotorStepLineEdit.setGeometry(QtCore.QRect(1400, 350, 41, 31))
+        self.slowMotorStepLineEdit.setObjectName("slowMotorStepLineEdit")
+
+        self.slowMotorSpeedLineEdit = QtWidgets.QLineEdit(self.centralwidget)
+        self.slowMotorSpeedLineEdit.setGeometry(QtCore.QRect(1450, 350, 41, 31))
+        self.slowMotorSpeedLineEdit.setObjectName("slowMotorSpeedLineEdit")
+
 #   COMBO BOX/DROP DOWN LISTS
         self.automateComboBox = QtWidgets.QComboBox(self.controlsGroup)
         self.automateComboBox.setGeometry(QtCore.QRect(10, 30, 91, 31))
@@ -355,6 +377,18 @@ class Ui_trainingWindow:
         self.taskTypeComboBox.setObjectName("taskTypeComboBox")
         self.taskTypeComboBox.addItem("")
         self.taskTypeComboBox.addItem("")
+
+        self.movingPortComboBox = QtWidgets.QComboBox(self.centralwidget)
+        self.movingPortComboBox.setGeometry(QtCore.QRect(1400, 130, 91, 31))
+        self.movingPortComboBox.setObjectName("movingPortComboBox")
+        self.movingPortComboBox.addItem("")
+        self.movingPortComboBox.addItem("")
+
+        self.movingLRPortComboBox = QtWidgets.QComboBox(self.centralwidget)
+        self.movingLRPortComboBox.setGeometry(QtCore.QRect(1400, 280, 91, 31))
+        self.movingLRPortComboBox.setObjectName("movingLRPortComboBox")
+        self.movingLRPortComboBox.addItem("")
+        self.movingLRPortComboBox.addItem("")
 
 #   LABELS
         self.lickIndicatorLabel = QtWidgets.QLabel(self.currentStatusGroup)
@@ -422,6 +456,10 @@ class Ui_trainingWindow:
         self.rightWaterTimeLabel = QtWidgets.QLabel(self.controlsGroup)
         self.rightWaterTimeLabel.setGeometry(QtCore.QRect(280, 460, 81, 31))
         self.rightWaterTimeLabel.setObjectName("rightWaterTimeLabel")
+
+        self.trialsToWaterLabel = QtWidgets.QLabel(self.controlsGroup)
+        self.trialsToWaterLabel.setGeometry(QtCore.QRect(310, 400, 51, 31))
+        self.trialsToWaterLabel.setObjectName("trialsToWaterLabel")
 
         self.automateLabel = QtWidgets.QLabel(self.controlsGroup)
         self.automateLabel.setGeometry(QtCore.QRect(10, 5, 91, 31))
@@ -609,6 +647,30 @@ class Ui_trainingWindow:
         self.customProbabilityLabel.setGeometry(QtCore.QRect(330, 60, 51, 25))
         self.customProbabilityLabel.setObjectName("customProbabilityLabel")
 
+        self.fastMotorLabel = QtWidgets.QLabel(self.centralwidget)
+        self.fastMotorLabel.setGeometry(QtCore.QRect(1420, 100, 51, 25))
+        self.fastMotorLabel.setObjectName("fastMotorLabel")
+
+        self.fastMotorSpeedLabel = QtWidgets.QLabel(self.centralwidget)
+        self.fastMotorSpeedLabel.setGeometry(QtCore.QRect(1400, 170, 51, 25))
+        self.fastMotorSpeedLabel.setObjectName("fastMotorSpeedLabel")
+
+        self.fastMotorStepLabel = QtWidgets.QLabel(self.centralwidget)
+        self.fastMotorStepLabel.setGeometry(QtCore.QRect(1450, 170, 51, 25))
+        self.fastMotorStepLabel.setObjectName("fastMotorStepLabel")
+
+        self.slowMotorLabel = QtWidgets.QLabel(self.centralwidget)
+        self.slowMotorLabel.setGeometry(QtCore.QRect(1420, 250, 51, 25))
+        self.slowMotorLabel.setObjectName("slowMotorLabel")
+
+        self.slowMotorSpeedLabel = QtWidgets.QLabel(self.centralwidget)
+        self.slowMotorSpeedLabel.setGeometry(QtCore.QRect(1400, 320, 51, 25))
+        self.slowMotorSpeedLabel.setObjectName("slowMotorSpeedLabel")
+
+        self.slowMotorStepLabel = QtWidgets.QLabel(self.centralwidget)
+        self.slowMotorStepLabel.setGeometry(QtCore.QRect(1450, 320, 51, 25))
+        self.slowMotorStepLabel.setObjectName("slowMotorStepLabel")
+
 #   SEPARATOR LINES
         self.controlsLine1 = QtWidgets.QFrame(self.controlsGroup)
         self.controlsLine1.setGeometry(QtCore.QRect(40, 210, 341, 20))
@@ -684,6 +746,7 @@ class Ui_trainingWindow:
         self.earlyLickCheckToggle.setText(_translate("MainWindow", "Check Early Licks"))
         self.leftWaterTimeLabel.setText(_translate("MainWindow", "Left water time"))
         self.rightWaterTimeLabel.setText(_translate("MainWindow", "Right water time"))
+        self.trialsToWaterLabel.setText(_translate("MainWindow", "Trials to water"))
         self.upperboundLabel.setText(_translate("MainWindow", "Upper Bound:"))
         self.lowerboundLabel.setText(_translate("MainWindow", "Lower Bound:"))
         self.stimulusLabel.setText(_translate("MainWindow", "AA               AB                BB               BA"))
@@ -739,6 +802,16 @@ class Ui_trainingWindow:
         self.automateLabel.setText(_translate("MainWindow", "Control Type"))
         self.taskTypeComboBox.setItemText(0, _translate("MainWindow", "Training"))
         self.taskTypeComboBox.setItemText(1, _translate("MainWindow", "ITS"))
+        self.movingPortComboBox.setItemText(0, _translate("MainWindow", "Moving Ports"))
+        self.movingPortComboBox.setItemText(1, _translate("MainWindow", "Stationary Ports"))
+        self.movingLRPortComboBox.setItemText(0, _translate("MainWindow", "Moving Ports"))
+        self.movingLRPortComboBox.setItemText(1, _translate("MainWindow", "Stationary Ports"))
+        self.fastMotorLabel.setText(_translate("MainWindow", "Fast Motor"))
+        self.fastMotorSpeedLabel.setText(_translate("MainWindow", "Speed"))
+        self.fastMotorStepLabel.setText(_translate("MainWindow", "Step Size"))
+        self.slowMotorLabel.setText(_translate("MainWindow", "Slow Motor (ITS)"))
+        self.slowMotorSpeedLabel.setText(_translate("MainWindow", "Speed"))
+        self.slowMotorStepLabel.setText(_translate("MainWindow", "Step Size"))
 
 
 if __name__ == "__main__":

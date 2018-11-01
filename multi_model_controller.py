@@ -16,64 +16,9 @@ import nidaqmx as ni
 import nidaqmx.system, nidaqmx.stream_readers, nidaqmx.stream_writers
 from nidaqmx.constants import LineGrouping
 import thorlabs_apt as apt
+from devices import Devices
 skipStartUi = 1
 
-
-class Devices:
-
-    def __init__(self, moving_ports=True):
-        self.out_task_0 = ni.Task()
-        self.out_task_0.do_channels.add_do_chan('cDAQ2Mod1/port0/line0:7',
-                                              line_grouping=LineGrouping.CHAN_PER_LINE)
-        self.writer_0 = ni.stream_writers.DigitalMultiChannelWriter(self.out_task_0.out_stream)
-        self.out_task_0.start()
-
-        self.out_task_1 = ni.Task()
-        self.out_task_1.do_channels.add_do_chan('cDAQ1Mod1/port0/line0:7',
-                                              line_grouping=LineGrouping.CHAN_PER_LINE)
-        self.writer_1 = ni.stream_writers.DigitalMultiChannelWriter(self.out_task_1.out_stream)
-        self.out_task_1.start()
-
-        self.out_tasks = [self.out_task_0, self.out_task_1]
-
-        self.in_task = ni.Task()
-        self.in_task.di_channels.add_di_chan('Dev2/port0/line0:1',
-                                             line_grouping=LineGrouping.CHAN_PER_LINE)
-        self.reader = ni.stream_readers.DigitalMultiChannelReader(self.in_task.in_stream)
-        self.in_task.start()
-
-        # MOTOR
-        # if not self.testing:
-        devices = apt.list_available_devices()
-        motor_0 = apt.Motor(devices[0][1])
-        self.motors = [motor_0]
-        if moving_ports:
-            # print(devices)
-            motor_1 = apt.Motor(devices[1][1])
-            self.motors.append(motor_1)
-            self.motor_step = 10
-
-    def motor_test(self, ix):
-        # self.motors[ix].move_velocity(2)
-        # self.motors[ix].move_by(10)
-        print('posn', self.motors[ix].position)
-        print('min posn', self.motors[ix].get_stage_axis_info())
-        print('min posn', self.motors[ix].get_stage_axis_info())
-        self.motors[ix].move_to(self.motors[ix].position+10)
-        time.sleep(2)
-
-        print('posn', self.motors[ix].position)
-        self.motors[ix].move_to(self.motors[ix].position-10)
-        print('max', self.motors[ix].get_velocity_parameter_limits())  # max accel, max vel
-        print('current', self.motors[ix].get_velocity_parameters())  # min vel, current accel, current max vel
-        time.sleep(2)
-        # self.motors[ix].move_velocity(1)
-        # self.motors[ix].move_by(10)
-        print('posn', self.motors[ix].position)
-        self.motors[ix].move_to(self.motors[ix].position+10)
-        # self.motor.move_home()
-        time.sleep(1)
-        print('posn', self.motors[ix].position)
 
 class Controller(QObject):
 
@@ -82,12 +27,11 @@ class Controller(QObject):
         # self.setupUi(self)
         # self.startUi = Ui_startWindow()
         self.trainingUi = Ui_trainingWindow(QMainWindow())
-        devices = Devices()
-        dmsModel = DMSModel(devices, testing=False)
-        itsModel = ITSModel(devices, testing=False)
+        self.forward_moving_ports = True
+        self.devices = Devices(self.forward_moving_ports)
+        dmsModel = DMSModel(self.devices, testing=False, moving_ports=self.forward_moving_ports)
+        itsModel = ITSModel(self.devices, testing=False, moving_ports=self.forward_moving_ports)
         dmsModel.motors[1].move_to(self.motors[1].position + 10)
-        # dmsModel.motor_test(1)
-        # devices.motor_test(1)
 
         self.thread = QThread()
         dmsModel.moveToThread(self.thread)
@@ -145,6 +89,20 @@ class Controller(QObject):
         self.trainingUi.ITSDelayDecrementLineEdit.setText("{:.3f}".format(self.models[1].delay_decrement))
         self.trainingUi.ITSDelayIncrementLineEdit.setText("{:.3f}".format(self.models[1].delay_increment))
 
+        self.motorBoxes = [self.trainingUi.slowMotorSpeedLineEdit, self.trainingUi.slowMotorStepLineEdit,
+                           self.trainingUi.fastMotorSpeedLineEdit, self.trainingUi.fastMotorStepLineEdit]
+
+        slow_vel_param = self.motors[0].get_velocity_parameters()
+        self.motorBoxes[0].setText("{:.3f}".format(slow_vel_param[1]))
+        self.motorBoxes[1].setText("{:.3f}".format(self.devices.sideways_motor_step))
+
+        if self.forward_moving_ports:
+            fast_vel_param = self.motors[1].get_velocity_parameters()
+            self.motorBoxes[2].setText("{:.3f}".format(fast_vel_param[1]))
+            self.motorBoxes[3].setText("{:.3f}".format(self.devices.forward_motor_step))
+
+        self.trainingUi.trialsToWaterLineEdit.setText("{}".format(self.models[self.cur_model].trials_to_water))
+
         #   BUTTON SIGNALS
         # self.trainingUi.backButton.clicked.connect(self.showStartUi)
         self.trainingUi.changePathButton.clicked.connect(self.changeDirTraining)
@@ -160,6 +118,8 @@ class Controller(QObject):
         self.trainingUi.useUserProbComboBox.currentTextChanged.connect(self.changeProbSource)
         self.trainingUi.automateComboBox.currentTextChanged.connect(self.changeAutomate)
         self.trainingUi.taskTypeComboBox.currentTextChanged.connect(self.changeTaskType)
+        self.trainingUi.movingPortComboBox.currentTextChanged.connect(self.changeMovingPorts)
+        self.trainingUi.movingLRPortComboBox.currentTextChanged.connect(self.changeLRMovingPorts)
 
         #   models[self.cur_model] SIGNALS
         for i in range(2):
@@ -214,16 +174,19 @@ class Controller(QObject):
         self.waterBoxes[2].returnPressed.connect(lambda: self.waterEditChanges(2))
         self.waterBoxes[3].returnPressed.connect(lambda: self.waterEditChanges(3))
 
+        self.motorBoxes[0].returnPressed.connect(lambda: self.motorEditChanges(0))
+        self.motorBoxes[1].returnPressed.connect(lambda: self.motorEditChanges(1))
+        self.motorBoxes[2].returnPressed.connect(lambda: self.motorEditChanges(2))
+        self.motorBoxes[3].returnPressed.connect(lambda: self.motorEditChanges(3))
+
         self.trainingUi.earlyLickCheckTimeLineEdit.returnPressed.connect(self.changeEarlyCheckTime)
+        self.trainingUi.trialsToWaterLineEdit.returnPressed.connect(self.changeTrialsToWater)
 
         self.trainingUi.errorTOLineEdit.returnPressed.connect(lambda: self.changeErrorTO())
         self.trainingUi.errorTOLineEdit.setText("{}".format(self.models[self.cur_model].timeout[1]))
         self.trainingUi.earlyLickTOLineEdit.returnPressed.connect(lambda: self.changeEarlyTO())
         self.trainingUi.earlyLickTOLineEdit.setText("{}".format(self.models[self.cur_model].early_timeout))
         self.trainingUi.earlyLickCheckTimeLineEdit.setText("{}".format(self.models[self.cur_model].early_lick_time))
-
-        # self.trainingUi.earlyLickTOLineEdit.returnPressed.connect(self.changeEarlyCheckTime)
-
 
         self.trainingUi.minLicksLineEdit.returnPressed.connect(self.minLicksChanges)
 
@@ -340,6 +303,25 @@ class Controller(QObject):
         elif trial_struct == 'Alternating':
             self.models[self.cur_model].random = False
 
+    def changeMovingPorts(self):
+        move_ports = self.trainingUi.movingPortComboBox.currentText()
+        if move_ports == "Moving Ports":
+            self.models[0].moving_ports = True
+            self.models[1].moving_ports = True
+        else:
+            self.models[0].moving_ports = False
+            self.models[1].moving_ports = False
+
+    def changeLRMovingPorts(self):
+        move_ports = self.trainingUi.movingPortComboBox.currentText()
+        if move_ports == "Moving Ports":
+            self.models[1].lr_moving_ports = True
+        else:
+            self.models[1].lr_moving_ports = False
+
+    def changeLRMovingPorts(self):
+        pass
+
     def changeProbSource(self):
         if self.cur_model == 1:  # ITS
             return
@@ -357,6 +339,12 @@ class Controller(QObject):
             self.models[self.cur_model].automate = False
         else:
             self.models[self.cur_model].automate = True
+
+    def changeTrialsToWater(self):
+        try:
+            self.models[self.cur_model].trials_to_water = float(self.trainingUi.trialsToWaterLineEdit.text())
+        except:
+            self.invalidInputMsg()
 
     def changeTaskType(self):  # mod
         cur_task = self.trainingUi.taskTypeComboBox.currentText()
@@ -419,6 +407,24 @@ class Controller(QObject):
                 if idx == 2 or idx == 4:
                     self.timeLineEditBoxes[idx].setText('{:.3f}'.format(self.models[self.cur_model].timing[idx]))
                     return
+            self.models[self.cur_model].timing[idx] = float(self.timeLineEditBoxes[idx].text())
+        except:
+            self.invalidInputMsg()
+
+    def motorEditChanges(self, idx):
+        try:
+            if idx == 0:  # change slow velocity
+                param = self.devices.motors[0].get_velocity_parameters()
+                self.devices.motors[0].set_velocity_parameters(param[0], param[1], float(self.motorBoxes[0].text()))
+            if idx == 1:  # change slow step size
+                self.devices.sideways_motor_step = float(self.motorBoxes[1].text())
+            elif idx == 2:  # change fast velocity
+                param = self.devices.motors[1].get_velocity_parameters()
+                self.devices.motors[1].set_velocity_parameters(param[0], param[1], float(self.motorBoxes[2].text()))
+            elif idx == 3:  # change fast step size
+                param = self.devices.motors[1].get_velocity_parameters()
+                self.devices.forward_motor_step = float(self.motorBoxes[3].text())
+
             self.models[self.cur_model].timing[idx] = float(self.timeLineEditBoxes[idx].text())
         except:
             self.invalidInputMsg()
@@ -600,14 +606,6 @@ class Controller(QObject):
         msg.showMessage("Invalid input")
         msg.exec()
 
-
-"""
-TO-DO:
-- stop program button
-- controls
-- indicator numbers
-- indicator graphs
-"""
 
 # Code to stop 'python has stopped working' error
 sys._excepthook = sys.excepthook
