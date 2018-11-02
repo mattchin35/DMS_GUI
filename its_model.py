@@ -271,6 +271,14 @@ class ITSModel(DMSModel):
             events += [perfect] + result + [early] + lick + times
             if not self.testing:
                 self.save(events)
+
+            print('Lick Counter', self.lick_side_counter)
+            print('amax', np.amax(self.lick_side_counter))
+            if np.amax(self.lick_side_counter) >= 2 and self.lr_moving_ports:
+                side = np.argmax(self.lick_side_counter)  # side licked
+                self.devices.move_lr(1-side)  # move to the opposite side
+                self.lick_side_counter *= 0
+
             self.endTrialSignal.emit()
             if self.testing:
                 print('by stimulus:\n', self.performance_stimulus)
@@ -283,12 +291,6 @@ class ITSModel(DMSModel):
                 self.refresh_metrics()
                 self.refreshSignal.emit()
                 self.refresh = False
-
-        if np.amax(self.lick_side_counter) >= 2 and self.lr_moving_ports:
-            side = self.lick_side_counter.argmax(self.lick_side_counter)
-            direction = 2 * side - 1  # map 0 to -1, 1 to 1 - reverse with (1-side) to switch directions
-            self.motors[0].move_by(direction * .8)
-            self.lick_side_counter *= 0
 
 
 if __name__ == '__main__':

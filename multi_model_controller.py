@@ -28,9 +28,9 @@ class Controller(QObject):
         # self.startUi = Ui_startWindow()
         self.trainingUi = Ui_trainingWindow(QMainWindow())
         self.forward_moving_ports = True
-        self.devices = Devices(self.forward_moving_ports)
+        self.devices = Devices(cd_ab=True, load_moving_ports=self.forward_moving_ports)
         dmsModel = DMSModel(self.devices, testing=False, moving_ports=self.forward_moving_ports)
-        itsModel = ITSModel(self.devices, testing=False, moving_ports=self.forward_moving_ports)
+        itsModel = ITSModel(self.devices, testing=False, moving_ports=self.forward_moving_ports, lr_moving_ports=False)
         if self.forward_moving_ports:
             self.devices.motors[1].move_to(self.devices.motors[1].position + 10)
 
@@ -316,7 +316,7 @@ class Controller(QObject):
             print("Forward moving ports off")
 
     def changeLRMovingPorts(self):
-        move_ports = self.trainingUi.movingPortComboBox.currentText()
+        move_ports = self.trainingUi.movingLRPortComboBox.currentText()
         if move_ports == "Moving Ports":
             self.models[1].lr_moving_ports = True
             print("ITS left/right moving ports on")

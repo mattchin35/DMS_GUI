@@ -495,6 +495,7 @@ class DMSModel(QObject):
         diff *= 2 / self.num_trial_types
         p = np.ones(self.num_trial_types) / self.num_trial_types - diff
         if np.sum(np.isnan(p)) > 0:
+            # print("fail")
             return
         else:
             self.probabilities = self.softmax(p)
@@ -720,7 +721,9 @@ class DMSModel(QObject):
         print('posn', self.motors[ix].position)
 
     def push_water(self):
+        self.correct_choice = 0
         self.deliver_water(0, 0)
+        self.correct_choice = 1
         self.deliver_water(0, 1)
 
     def test_odors(self):
@@ -732,7 +735,7 @@ class DMSModel(QObject):
         self.run_odor(1)
 
 if __name__ == '__main__':
-    devices = Devices()
+    devices = Devices(cd_ab=False, load_moving_ports=False)
     dmsModel = DMSModel(devices, testing=False)
     dmsModel.push_water()
     # dmsModel.test_odors()
