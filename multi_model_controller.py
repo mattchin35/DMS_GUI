@@ -31,7 +31,8 @@ class Controller(QObject):
         self.devices = Devices(self.forward_moving_ports)
         dmsModel = DMSModel(self.devices, testing=False, moving_ports=self.forward_moving_ports)
         itsModel = ITSModel(self.devices, testing=False, moving_ports=self.forward_moving_ports)
-        dmsModel.motors[1].move_to(self.motors[1].position + 10)
+        if self.forward_moving_ports:
+            self.devices.motors[1].move_to(self.devices.motors[1].position + 10)
 
         self.thread = QThread()
         dmsModel.moveToThread(self.thread)
@@ -92,12 +93,12 @@ class Controller(QObject):
         self.motorBoxes = [self.trainingUi.slowMotorSpeedLineEdit, self.trainingUi.slowMotorStepLineEdit,
                            self.trainingUi.fastMotorSpeedLineEdit, self.trainingUi.fastMotorStepLineEdit]
 
-        slow_vel_param = self.motors[0].get_velocity_parameters()
+        slow_vel_param = self.devices.motors[0].get_velocity_parameters()
         self.motorBoxes[0].setText("{:.3f}".format(slow_vel_param[1]))
         self.motorBoxes[1].setText("{:.3f}".format(self.devices.sideways_motor_step))
 
         if self.forward_moving_ports:
-            fast_vel_param = self.motors[1].get_velocity_parameters()
+            fast_vel_param = self.devices.motors[1].get_velocity_parameters()
             self.motorBoxes[2].setText("{:.3f}".format(fast_vel_param[1]))
             self.motorBoxes[3].setText("{:.3f}".format(self.devices.forward_motor_step))
 
@@ -308,19 +309,20 @@ class Controller(QObject):
         if move_ports == "Moving Ports":
             self.models[0].moving_ports = True
             self.models[1].moving_ports = True
+            print("Forward moving ports on")
         else:
             self.models[0].moving_ports = False
             self.models[1].moving_ports = False
+            print("Forward moving ports off")
 
     def changeLRMovingPorts(self):
         move_ports = self.trainingUi.movingPortComboBox.currentText()
         if move_ports == "Moving Ports":
             self.models[1].lr_moving_ports = True
+            print("ITS left/right moving ports on")
         else:
             self.models[1].lr_moving_ports = False
-
-    def changeLRMovingPorts(self):
-        pass
+            print("ITS left/right moving ports off")
 
     def changeProbSource(self):
         if self.cur_model == 1:  # ITS
@@ -348,17 +350,18 @@ class Controller(QObject):
 
     def changeTaskType(self):  # mod
         cur_task = self.trainingUi.taskTypeComboBox.currentText()
+        print(cur_task)
         if cur_task == 'Training':
             if self.cur_model == 0:  # no change
                 return
             new_model = 0
-            # print('switched to DMS')
+            print('switched to DMS')
 
         elif cur_task == 'ITS':
             if self.cur_model == 1:  # no change
                 return
             new_model = 1
-            # print('switched to ITS')
+            print('switched to ITS')
 
         else:
             return
@@ -383,17 +386,18 @@ class Controller(QObject):
         self.models[self.cur_model].save_path = self.trainingUi.curPathLineEdit.text()
         self.trainingUi.earlyLickCheckTimeLineEdit.setText("{:.3f}".format(self.models[self.cur_model].early_lick_time))
         self.curAnimalChanges()
+        # self.refreshSaveFiles()
 
     def startTrialInputs(self):
         print('Trial: {}'.format(self.models[self.cur_model].trial_num))
         self.trainingUi.trialNoTextBrowser.setText("{}".format(self.models[self.cur_model].trial_num))
-        self.trainingUi.trialTypeTextBrowser.setText(['AA', 'AB', 'BB', 'BA'][self.models[self.cur_model].trial_type])
+        self.trainingUi.trialTypeTextBrowser.setText(['CA', 'CB', 'DB', 'DA'][self.models[self.cur_model].trial_type])
         for i in range(self.models[self.cur_model].num_trial_types):
             self.autoProbability[i].setText("{:.2f}".format(self.models[self.cur_model].probabilities[i]))
 
     def curAnimalChanges(self):
         if self.models[self.cur_model].mouse == self.trainingUi.curAnimalLineEdit.text():
-            return
+            return  # erroneous quit here
         if self.models[self.cur_model].mouse:  # must come before models[self.cur_model].mouse is changed
             self.models[self.cur_model].refresh = True
             print("metric data has been refreshed due to mouse change")

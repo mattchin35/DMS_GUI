@@ -325,19 +325,19 @@ class Ui_trainingWindow:
         # (120, 40, 201, 211)
         #     (1290, 700, 91, 21)
         self.fastMotorStepLineEdit = QtWidgets.QLineEdit(self.centralwidget)
-        self.fastMotorStepLineEdit.setGeometry(QtCore.QRect(1400, 200, 41, 31))
+        self.fastMotorStepLineEdit.setGeometry(QtCore.QRect(1450, 200, 41, 31))
         self.fastMotorStepLineEdit.setObjectName("fastMotorStepLineEdit")
 
         self.fastMotorSpeedLineEdit = QtWidgets.QLineEdit(self.centralwidget)
-        self.fastMotorSpeedLineEdit.setGeometry(QtCore.QRect(1450, 200, 41, 31))
+        self.fastMotorSpeedLineEdit.setGeometry(QtCore.QRect(1400, 200, 41, 31))
         self.fastMotorSpeedLineEdit.setObjectName("fastMotorSpeedLineEdit")
 
         self.slowMotorStepLineEdit = QtWidgets.QLineEdit(self.centralwidget)
-        self.slowMotorStepLineEdit.setGeometry(QtCore.QRect(1400, 350, 41, 31))
+        self.slowMotorStepLineEdit.setGeometry(QtCore.QRect(1450, 350, 41, 31))
         self.slowMotorStepLineEdit.setObjectName("slowMotorStepLineEdit")
 
         self.slowMotorSpeedLineEdit = QtWidgets.QLineEdit(self.centralwidget)
-        self.slowMotorSpeedLineEdit.setGeometry(QtCore.QRect(1450, 350, 41, 31))
+        self.slowMotorSpeedLineEdit.setGeometry(QtCore.QRect(1400, 350, 41, 31))
         self.slowMotorSpeedLineEdit.setObjectName("slowMotorSpeedLineEdit")
 
 #   COMBO BOX/DROP DOWN LISTS

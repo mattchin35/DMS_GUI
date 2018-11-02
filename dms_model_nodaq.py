@@ -59,7 +59,7 @@ class DMSModel(QObject):
         self.random_hi_bound = -1  # starting value
         self.low_bounds = np.ones(self.num_trial_types)
         self.hi_bounds = np.ones(self.num_trial_types) * 3
-        self.structure = 2  # 0 for AA/AB, 1 for BB/BA, 2 for Full
+        self.structure = 2  # 0 for CA/CB, 1 for DB/DA, 2 for Full
         self.trial_type_progress = np.zeros(2)  # correct count, total number of trial type seen
         self.probabilities = np.ones(self.num_trial_types) / self.num_trial_types
         self.prev_trial = np.zeros(3)
@@ -73,7 +73,7 @@ class DMSModel(QObject):
         self.use_user_probs = False
         self.user_probabilities = self.probabilities.copy()
         self.save_path = ''  # save location
-        self.mouse = 'test'  # Mouse name
+        self.mouse = ''  # Mouse name
         self.events_file = ''
         self.licking_file = ''
         self.run = False
@@ -372,7 +372,6 @@ class DMSModel(QObject):
         self.write(0)
 
         t = 0
-        # while t <= self.response_window:
         while t <= self.timing[self.cur_stage]:
             time.sleep(.001)
             t = time.time() - st
@@ -407,6 +406,7 @@ class DMSModel(QObject):
                 if side == self.correct_choice:
                     choice = 0  # correct
                     self.give_water = True
+                    break
                 else:
                     choice = 1  # error
                 break
@@ -443,7 +443,6 @@ class DMSModel(QObject):
         self.write(0)
         while (time.time() - st) < water_time:
             self.update_indicator()
-            self.output = list(self.water_daq[side])
 
         print('water delivered')
         self.output = list(self.all_low)
@@ -657,14 +656,15 @@ class DMSModel(QObject):
                 lick[side] = 1
                 self.lickSideCounter[side] += 1
 
-            if self.give_water:  # aka choice = 1
+            if self.give_water:  # aka choice = 0
                 self.trial_type_progress[0] += 1
                 lick[2 + self.correct_choice] = 1
                 times[t_idx + self.correct_choice] = time.perf_counter()  # L/R reward
                 trials_to_water_counter = 0
+                self.deliver_water(early, side)
             elif trials_to_water_counter >= self.trials_to_water:
                 trials_to_water_counter = 0
-                self.deliver_water(early)
+                self.deliver_water(early, side)
             else:
                 # increase trials-to-water counter
                 trials_to_water_counter += 1
@@ -720,10 +720,8 @@ class DMSModel(QObject):
         print('posn', self.motors[ix].position)
 
     def push_water(self):
-        self.correct_choice = 0
-        self.deliver_water(0)
-        self.correct_choice = 1
-        self.deliver_water(0)
+        self.deliver_water(0, 0)
+        self.deliver_water(0, 1)
 
     def test_odors(self):
         self.trial_type = 0
@@ -736,7 +734,7 @@ class DMSModel(QObject):
 if __name__ == '__main__':
     devices = Devices()
     dmsModel = DMSModel(devices, testing=False)
-    # dmsModel.push_water()
+    dmsModel.push_water()
     # dmsModel.test_odors()
     # model.motor_test(1)
     dmsModel.shut_down()

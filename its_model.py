@@ -74,18 +74,18 @@ class ITSModel(DMSModel):
         # choice = 0 - correct, 1 - error, 2 - switch, 3 - miss
         # ITS: choice = 0 - any side choice, 1 - lick both at same time, 2 - switch, 3 - miss
         self.output = self.go_cue
-        self.write()
+        self.write(0)
         while t < .15:
             time.sleep(.001)
             t = time.time() - st
             self.update_indicator()
 
         self.output = self.all_low
-        self.write()
+        self.write(0)
 
         t = 0
         # while t <= self.response_window:
-        while t <= self.timing[2]:
+        while t <= self.timing[self.cur_stage]:
             time.sleep(.001)
             t = time.time() - st
             self.elapsed_time[self.cur_stage - 2] = t
@@ -140,11 +140,10 @@ class ITSModel(DMSModel):
         st = time.time()
         early *= self.early_lick_check  # no water penalty if lick check is off
         water_time = self.water_times[self.correct_choice + early*2]
-        self.output = list(self.water_daq[self.correct_choice])
+        self.output = list(self.water_daq[side])
         self.write(0)
         while (time.time() - st) < water_time:
             self.update_indicator()
-            self.output = list(self.water_daq[side])
 
         print('water delivered')
         self.output = list(self.all_low)
@@ -152,10 +151,12 @@ class ITSModel(DMSModel):
 
     @pyqtSlot()
     def run_program(self):
+        print("running")
         self.run = True
         self.refresh = False
         choice = 0
         early = 0
+        trials_to_water_counter = 0
         self.random = True
         while self.run:
             # File I/O
@@ -225,6 +226,7 @@ class ITSModel(DMSModel):
             times[t_idx] = time.perf_counter()  # go tone
             t_idx += 1
             choice, result, side = self.determine_choice()
+            print("Choice: ", choice)
             if choice != 3:  # effective lick
                 times[t_idx] = time.perf_counter()
 
@@ -238,12 +240,12 @@ class ITSModel(DMSModel):
                 lick[2 + side] = 1
                 self.trial_type_progress[0] += 1
                 times[t_idx + side] = time.perf_counter()  # L/R reward
-                self.deliver_water(early)
+                self.deliver_water(early, side)
                 trials_to_water_counter = 0
                 self.lick_side_counter[side] += 1
             elif trials_to_water_counter >= self.trials_to_water:
                 trials_to_water_counter = 0
-                self.deliver_water(early)
+                self.deliver_water(early, self.correct_choice)  # water side doesn't matter here
             else:
                 # increase trials-to-water counter
                 trials_to_water_counter += 1
