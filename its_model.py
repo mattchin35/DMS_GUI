@@ -1,22 +1,17 @@
 import time
 import numpy as np
-import pandas as pd
 import nidaqmx as ni
-import nidaqmx.system, nidaqmx.stream_readers, nidaqmx.stream_writers
-from nidaqmx.constants import LineGrouping
-from PyQt5.QtCore import QDate, QTime, QDateTime, Qt, pyqtSignal, pyqtSlot, QObject
+from PyQt5.QtCore import pyqtSlot
 import sys, os, csv, collections
 from dms_model_nodaq import DMSModel
-import thorlabs_apt as apt
 
-# model = DMSModel(testing=True)
 
 class ITSModel(DMSModel):
     """A Python implementation of the ITS program. Primary changes are the addition of motor control,
     the lack of odor delivery, and the delivery of water for any choice of lick port."""
 
-    def __init__(self, cd_ab, devices, testing=False, moving_ports=True, lr_moving_ports=False):
-        super().__init__(cd_ab, devices, testing, moving_ports)
+    def __init__(self, opts, devices):
+        super().__init__(opts, devices)
 
         # iti, no lick, response, consumption
         if self.testing:
@@ -41,7 +36,7 @@ class ITSModel(DMSModel):
         self.delay_min = 0
         self.cur_delay = 0
         self.structure = 2
-        self.lr_moving_ports = lr_moving_ports
+        self.lr_moving_ports = opts.lr_moving_ports
         self.lick_side_counter = np.zeros(2)
 
     def its_delay(self):

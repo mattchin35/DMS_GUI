@@ -1,15 +1,11 @@
-import time, random
+import time
 import numpy as np
-import pandas as pd
 import nidaqmx as ni
-import nidaqmx.system, nidaqmx.stream_readers, nidaqmx.stream_writers
 from nidaqmx.constants import LineGrouping
 from PyQt5.QtCore import QDate, QTime, QDateTime, Qt, pyqtSignal, pyqtSlot, QObject
-from PyQt5.QtWidgets import *
-from PyQt5.QtGui import QIcon, QFont
 import sys, os, csv, collections
 import thorlabs_apt as apt
-from devices import Devices
+from utilities import Devices, Options
 
 np.random.seed(2)
 EPS = np.finfo(float).eps
@@ -25,21 +21,22 @@ class DMSModel(QObject):
     startTrialSignal = pyqtSignal()
     endTrialSignal = pyqtSignal()
     refreshSignal = pyqtSignal()
+    randomChangedSignal = pyqtSignal()
     intReady = pyqtSignal(int)
     intervalTime = pyqtSignal(float)
 
-    def __init__(self, cd_ab, devices, testing=False, moving_ports=True):
+    def __init__(self, opts, devices):
         super().__init__()
         self.num_trial_types = 4
-        self.testing = testing
-        self.moving_ports = moving_ports
-        self.cd_ab = cd_ab
+        self.testing = opts.testing
+        self.moving_ports = opts.moving_ports
+        self.cd_ab = opts.cd_ab
 
         # performance
         self.trial_num = 0
         self.trial_type_history = []
         self.trial_correct_history = []
-        self.trialArray = []  # make a single list of (trial number, choice, early)
+        self.trial_array = []  # make a single list of (trial number, choice, early)
         self.indicator = np.array([[False], [False]])
         self.prev_indicator = np.array([[False], [False]])
         self.performance_overall = np.zeros((9, 2))  # was 8 2
@@ -156,6 +153,7 @@ class DMSModel(QObject):
         self.in_task = devices.in_task
         self.reader = devices.reader
         self.devices = devices
+        self.last_trial_plotted = -1
 
     def update_indicator(self):
         self.prev_indicator = self.indicator.copy()
@@ -167,71 +165,48 @@ class DMSModel(QObject):
             time.sleep(.001)
             self.licking_export.append([time.perf_counter(), int(self.indicator[0]), int(self.indicator[1])])
 
-    def choose_alternating_trial(self):
-        """
-        Choose the next alternating trial type to run. A number of correct trials is
-        selected from the bounds input by the user.
-        """
-        # if first trial, create a starting hi bound
-        # upper bound is a random integer from lb to ub
-        if self.random_hi_bound == -1:
-            self.set_trial_hi()
+    def choose_next_trial(self):
+        move = False
+        if self.trial_type_progress[1] >= self.strict_ub:
+            move = True
+        # potentially move to the next trial type if current progress is greater than minimum
+        elif self.trial_type_progress[0] >= self.low_bounds[self.trial_type]:
+            # move to the next trial if greater than the trial maximum or the random bound
+            if self.trial_type_progress[0] >= self.hi_bounds[self.trial_type] \
+                    or self.trial_type_progress[0] >= self.random_hi_bound:
+                move = True
 
-        # check if num correct is >= hi bound
-        if self.trial_type_progress[0] >= self.random_hi_bound \
-                or self.trial_type_progress[1] >= self.strict_ub:
+        if move:
             if self.structure == 0:  # AA/AB
                 self.trial_type = (self.trial_type + 1) % 2
             elif self.structure == 1:  # BB/BA
                 self.trial_type = 2 + ((self.trial_type + 1) % 2)
             else:  # Full
-                self.trial_type = (self.trial_type + 1) % 4
+                if self.random:
+                    self.trial_type = self.trial_sample()
+                else:
+                    self.trial_type = (self.trial_type + 1) % 4
 
             self.trial_type_progress *= 0
-            self.set_trial_hi()
+            self.random_hi_bound = np.random.randint(self.low_bounds[self.trial_type],
+                                                     self.hi_bounds[self.trial_type] + 1)
 
         if self.automate:
-            trange = self.min_trial_to_auto[0]
-            if self.trial_num >= trange:
-                trials_in_range = self.trial_correct_history[(len(self.trial_correct_history)-trange)
-                                                             :len(self.trial_correct_history)]
-                recent_avg = collections.Counter(trials_in_range)[0] / trange
-                if recent_avg >= .8:
-                    self.random = True
-
-    def choose_random_trial(self):
-        """
-        Choose the next random trial to run. A trial type is selected and set to run
-        for a random number of times, regardless of the number correct.
-        """
-        if self.random_hi_bound == -1:
-            self.set_trial_hi()
-
-        # check if total num seen is >= hi bound
-        if self.trial_type_progress[1] >= self.random_hi_bound:
-            if self.structure == 0:  # AA/AB
-                self.trial_type = (self.trial_type + 1) % 2
-            elif self.structure == 1:  # BB/BA
-                self.trial_type = 2 + ((self.trial_type + 1) % 2)
-            else:  # Full - sample a trial type
-                self.trial_type = self.trial_sample()
-
-            self.trial_type_progress *= 0
-            self.set_trial_hi()
-
-        if self.automate:
-            trange = self.min_trial_to_auto[1]
+            trange = self.min_trial_to_auto[int(self.random)]
             if self.trial_num >= trange:
                 trials_in_range = self.trial_correct_history[(len(self.trial_correct_history) - trange)
                                                              :len(self.trial_correct_history)]
                 recent_avg = collections.Counter(trials_in_range)[0] / trange
-                if recent_avg <= .8:
-                    self.random = False
+                if recent_avg >= .8:
+                    if self.structure < 2:
+                        self.structure = 2
+                    elif self.structure == 2:
+                        self.random = True  # send signal to update random status
+                        self.randomChangedSignal.emit()
 
-    def set_trial_hi(self):
-        """Make the above code less wordy with this shortcut."""
-        self.random_hi_bound = np.random.randint(self.low_bounds[self.trial_type],
-                                                 self.hi_bounds[self.trial_type] + 1)
+                if recent_avg <= .5 and self.random:
+                    self.random = False  # send signal to update random status
+                    self.randomChangedSignal.emit()
 
     def trial_sample(self):
         """Sample a trial type from the full set of trials, minus the current trial type."""
@@ -241,12 +216,14 @@ class DMSModel(QObject):
         else:
             tmp = np.exp(self.user_probabilities)
 
-        trial_type = np.random.choice(4, p=tmp / np.sum(tmp))
+        tmp[self.trial_type] = 0  # do not allow current trial to repeat
+        tmp /= np.sum(tmp)
+        trial_type = np.random.choice(4, p=tmp)
         return trial_type
 
     def run_interval(self, delay):
         """A generic delay between stages of the task."""
-        st = time.time()
+        st = time.perf_counter()
         t = 0
         if self.cur_stage == 0:
             self.output = self.light
@@ -254,7 +231,7 @@ class DMSModel(QObject):
 
         while t < delay:
             time.sleep(.001)
-            t = time.time() - st
+            t = time.perf_counter() - st
             self.update_indicator()
             if self.cur_stage == 3:
                 # stimulus time is staggered by two indices - only delay uses this function during stimulus
@@ -270,7 +247,7 @@ class DMSModel(QObject):
     def run_no_lick(self):
         """Delay the trial until the mouse stops licking for a desired time."""
         no_lick = False
-        st = time.time()
+        st = time.perf_counter()
         while not no_lick:
             """
             1. check for lick
@@ -280,11 +257,10 @@ class DMSModel(QObject):
             time.sleep(.001)
             self.update_indicator()
             if np.sum(self.indicator) > 0:
-                st = time.time()
+                st = time.perf_counter()
 
-            t = time.time() - st
+            t = time.perf_counter() - st
             self.intervalTime.emit(t)
-            # if t > self.no_lick:
             if t > self.timing[1]:  # no lick time stage 1
                 no_lick = True
 
@@ -293,7 +269,7 @@ class DMSModel(QObject):
         Release odors.
         :param cue: 0 or 1, denoting the odor delivery stage.
         """
-        st = time.time()
+        st = time.perf_counter()
         t = 0
         # while t < self.odor_times[cue]:
         early = 0
@@ -303,7 +279,7 @@ class DMSModel(QObject):
         while t < self.timing[2 + cue*2]:
             # cue is 0 (first odor) or 1 (second odor); odor stages are 2 or 4
             time.sleep(.001)
-            t = time.time() - st
+            t = time.perf_counter() - st
             # stimulus time is staggered by two indices
             self.elapsed_time[self.cur_stage - 2] = t
             self.intervalTime.emit(t)
@@ -324,13 +300,13 @@ class DMSModel(QObject):
 
     def run_blank(self):
         # punishment blank
-        st = time.time()
+        st = time.perf_counter()
         t = 0
         self.output = list(self.blank)
         self.write(0)
         while t < .15:
             time.sleep(.001)
-            t = time.time() - st
+            t = time.perf_counter() - st
             self.intervalTime.emit(t)
             self.update_indicator()
 
@@ -351,8 +327,7 @@ class DMSModel(QObject):
             For performance updates.
         side: the side chosen by the mouse. -1 for a switch or miss, 0 left, 1 right.
         """
-        st = time.time()
-        t = 0
+        st = time.perf_counter()
         licks = np.zeros((2, 1))
         active = False
         choice = 3  # miss
@@ -362,7 +337,7 @@ class DMSModel(QObject):
         t = 0
         while t <= self.timing[self.cur_stage]:
             time.sleep(.001)
-            t = time.time() - st
+            t = time.perf_counter() - st
             self.elapsed_time[self.cur_stage - 2] = t
             self.intervalTime.emit(t)
 
@@ -393,7 +368,6 @@ class DMSModel(QObject):
                 side = np.argmax(licks)
                 if side == self.correct_choice:
                     choice = 0  # correct
-                    self.give_water = True
                     break
                 else:
                     choice = 1  # error
@@ -409,33 +383,24 @@ class DMSModel(QObject):
                     side = 1 - self.correct_choice
                     self.give_water = False
                 break
-                # side = random.getrandbits(1)
-                # if side == self.correct_choice:
-                #     choice = 0  # correct
-                #     self.give_water = True
-                # else:
-                #     choice = 1  # error
-                #     self.give_water = False
-                # break
 
         self.trial_correct_history.append(choice)
         result[choice] = 1
         return choice, result, side
 
-    def deliver_water(self, early, side):
+    def deliver_water(self, early):
         """Deliver water, assuming the right choice was made."""
-        st = time.time()
+        st = time.perf_counter()
         early *= self.early_lick_check  # no water penalty if lick check is off
         water_time = self.water_times[self.correct_choice + early*2]
         self.output = list(self.water_daq[self.correct_choice])
         self.write(0)
-        while (time.time() - st) < water_time:
+        while (time.perf_counter() - st) < water_time:
             self.update_indicator()
 
         print('water delivered')
         self.output = list(self.all_low)
         self.write(0)
-        # self.out_task.write()
 
     def shut_down(self):
         [task.stop() for task in self.out_tasks]
@@ -458,7 +423,7 @@ class DMSModel(QObject):
         self.trial_num = 0
         self.trial_type_history = []
         self.trial_correct_history = []
-        self.trialArray = []
+        self.trial_array = []
         self.correct_avg = []
         self.performance_overall *= 0
         self.performance_stimulus *= 0
@@ -473,6 +438,7 @@ class DMSModel(QObject):
         self.switch_trials = [[], []]
         self.miss_trials = [[], []]
         self.probabilities = np.ones(self.num_trial_types) / self.num_trial_types
+        self.last_trial_plotted = -1
 
     def update_probabilities(self):
         perc_corr = self.performance_stimulus[:,2] / (self.performance_stimulus[:,0] + np.finfo(float).eps)
@@ -488,15 +454,14 @@ class DMSModel(QObject):
             print("Probabilities: ", self.probabilities)
 
     def prepare_plot_data(self, choice, early):
-        self.trialArray.append((self.trial_num, self.trial_type, choice, early))
+        self.trial_array.append((self.trial_num, self.trial_type, choice, early))
         if self.trial_num < 30:
             tmp = self.trial_correct_history
         else:
             tmp = self.trial_correct_history[-30:]
         # self.correct_avg.append(np.sum(tmp[tmp == 0]) / len(tmp) * 100)
         self.correct_avg.append(collections.Counter(tmp)[0] / (len(tmp) + np.finfo(float).eps) * 100)
-
-        self.bias.append(self.performance_overall[5,0] - self.performance_overall[6,0])
+        self.bias.append(self.performance_overall[5, 0] - self.performance_overall[6, 0])
 
     def update_performance(self, choice, result, early, lick):
         """
@@ -541,12 +506,12 @@ class DMSModel(QObject):
 
     def run_go_cue(self):
         self.output = self.go_cue
-        st = time.time()
+        st = time.perf_counter()
         t = 0
         self.write(0)
         while t < .15:
             time.sleep(.001)
-            t = time.time() - st
+            t = time.perf_counter() - st
             self.update_indicator()
 
         self.output = self.all_low
@@ -586,10 +551,7 @@ class DMSModel(QObject):
 
             time.sleep(.001)  # need sleep time for graph
             self.elapsed_time *= 0
-            if self.random:
-                self.choose_random_trial()
-            else:
-                self.choose_alternating_trial()
+            self.choose_next_trial()
 
             self.correct_choice = self.trial_type % 2
             self.trial_type_history.append(self.trial_type)
@@ -646,9 +608,6 @@ class DMSModel(QObject):
 
             self.run_go_cue()
 
-            if trials_to_water_counter >= self.trials_to_water:
-                self.give_water = True
-
             times[t_idx] = time.perf_counter()  # go tone
             t_idx += 1
             if self.give_water:
@@ -667,11 +626,14 @@ class DMSModel(QObject):
                 lick[side] = 1
                 self.lickSideCounter[side] += 1
 
-            if self.give_water:  # aka choice = 0
+            if trials_to_water_counter >= self.trials_to_water:
+                self.give_water = True
+
+            if choice == 0 or self.give_water:
                 self.trial_type_progress[0] += 1
-                if side >=0:  # lick made 
+                if side >= 0:  # lick made
                     lick[2 + side] = 1
-                    times[t_idx + side] = time.perf_counter()  # L/R reward\
+                    times[t_idx + side] = time.perf_counter()  # L/R reward
 
                 trials_to_water_counter = 0
                 self.deliver_water(early, self.correct_choice)
@@ -692,7 +654,6 @@ class DMSModel(QObject):
             self.update_performance(choice, result, early, lick)
             self.prepare_plot_data(choice, early)
 
-            
             # remove ports from mouse
             if self.moving_ports:
                 self.devices.move_backward()
@@ -748,8 +709,9 @@ class DMSModel(QObject):
         self.run_odor(1)
 
 if __name__ == '__main__':
-    devices = Devices(cd_ab=False, load_moving_ports=False)
-    dmsModel = DMSModel(True, devices, testing=False)
+    opts = Options()
+    devices = Devices(opts)
+    dmsModel = DMSModel(opts, devices)
     dmsModel.push_water()
     # dmsModel.test_odors()
     # model.motor_test(1)

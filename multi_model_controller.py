@@ -1,9 +1,5 @@
 import sys
 import numpy as np
-import time
-# from PyQt5 import QtCore, QtGui, QtWidgets, uic
-# from PyQt5.QtCore import QObject, QCoreApplication, QThread, pyqtSlot
-# from PyQt5.QtWidgets import QMainWindow, QDialog, QFileDialog
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
@@ -12,11 +8,8 @@ from dms_training_window_mod import Ui_trainingWindow
 from dms_model_nodaq import DMSModel
 from its_model import ITSModel
 import pyqtgraph as pg
-import nidaqmx as ni
-import nidaqmx.system, nidaqmx.stream_readers, nidaqmx.stream_writers
-from nidaqmx.constants import LineGrouping
 import thorlabs_apt as apt
-from devices import Devices
+from utilities import Devices, Options
 skipStartUi = 1
 
 
@@ -26,11 +19,12 @@ class Controller(QObject):
         super().__init__()
         # self.setupUi(self)
         # self.startUi = Ui_startWindow()
+        opts = Options()
         self.trainingUi = Ui_trainingWindow(QMainWindow())
         self.forward_moving_ports = True
         cd_ab = True
         self.devices = Devices(cd_ab=cd_ab, load_moving_ports=self.forward_moving_ports)
-        dmsModel = DMSModel(cd_ab, self.devices, testing=False, moving_ports=self.forward_moving_ports)
+        dmsModel = DMSModel(opts, self.devices)
         itsModel = ITSModel(cd_ab, self.devices, testing=False, moving_ports=self.forward_moving_ports, lr_moving_ports=True)
         if self.forward_moving_ports:
             self.devices.motors[1].move_to(self.devices.motors[1].position + 10)
@@ -111,7 +105,7 @@ class Controller(QObject):
         self.trainingUi.startButton.clicked.connect(self.models[self.cur_model].run_program)
         self.trainingUi.stopButton.clicked.connect(self.stopProgram)
         # self.trainingUi.changeAnimalButton.clicked.connect(self.changeMouse)  # use lineEdit.returnPressed
-        self.trainingUi.giveWaterButton.clicked.connect(self.giveWater)
+        self.trainingUi.giveWaterToggle.clicked[bool].connect(self.giveWater)
         self.trainingUi.earlyLickCheckToggle.clicked[bool].connect(self.earlyLickToggle)
 
         #   DROPDOWN LISTS
@@ -130,6 +124,7 @@ class Controller(QObject):
             self.models[i].intervalTime.connect(self.timeDisplay)
             self.models[i].lickSignal.connect(self.lickIndicator)
             self.models[i].refreshSignal.connect(self.clearPlots)
+            self.models[i].randomChangedSignal.connect(self.changeRandom)
 
         self.timeBoxes = [self.trainingUi.itiTextBrowser, self.trainingUi.noLickTimeTextBrowser,
                           self.trainingUi.odor1TextBrowser, self.trainingUi.delay1TextBrowser,
@@ -277,8 +272,11 @@ class Controller(QObject):
             self.trainingUi.rightLickIndicatorWidget.setStyleSheet(
                 "QWidget { background-color: %s}" % self.led_off.name())
 
-    def giveWater(self):
-        self.models[self.cur_model].give_water = True
+    def giveWaterToggle(self, pressed):
+        if pressed:
+            self.models[self.cur_model].give_water = True
+        else:
+            self.models[self.cur_model].give_water = False
 
     def timeDisplay(self, t):
         self.timeBoxes[self.models[self.cur_model].cur_stage].setText("{:.3f}".format(t))
@@ -304,6 +302,11 @@ class Controller(QObject):
             self.models[self.cur_model].random = True
         elif trial_struct == 'Alternating':
             self.models[self.cur_model].random = False
+
+    def changeRandom(self):
+        random = self.models[self.cur_model].random
+        if random:
+            self.trainingUi.trialStructureComboBox.setCurrentIndex(int(random))
 
     def changeMovingPorts(self):
         move_ports = self.trainingUi.movingPortComboBox.currentText()
@@ -532,28 +535,21 @@ class Controller(QObject):
 
     def plot(self):
         current_trial = self.models[self.cur_model].trial_num
+        brushes = ['g', 'r', 'y', 'w']
 
-        trial_num, trial_type, choice, early = self.models[self.cur_model].trialArray[-1]
-        if choice == 0:  # correct
-            symbolBrush = 'g'
-        elif choice == 1:  # error
-            symbolBrush = 'r'
-        elif choice == 2:  # switch
-            symbolBrush = 'y'
-        else:  # miss
-            symbolBrush = 'w'
-
-
-        print(trial_num, trial_type, choice, early, symbolBrush)
-
-        if early == 1:
-            symbolPen = symbolBrush
-            symbolBrush = None
-        else:
-            symbolPen = None
-
+        # trial_num, trial_type, choice, early = self.models[self.cur_model].trial_array[-1]
+        trials = self.models[self.cur_model].trial_array[self.models[self.cur_model].last_trial_plotted+1:]
         # Trial-by-Trial Graphic
-        self.pg_trialByTrial.plot([current_trial], [trial_type], pen=None, symbolBrush=symbolBrush, symbolPen=symbolPen)
+        # self.pg_trialByTrial.plot([current_trial], [trial_type], pen=None, symbolBrush=symbolBrush, symbolPen=symbolPen)
+        for trial_num, trial_type, choice, early in trials:
+            symbolBrush = brushes[choice]
+            symbolPen = None
+            if early == 1:
+                symbolBrush = None
+                symbolPen = symbolBrush
+
+            self.pg_trialByTrial.plot([trial_num], [trial_type],
+                                      pen=None, symbolBrush=symbolBrush, symbolPen=symbolPen)
 
         # set range of visible data
         if current_trial < 31:
@@ -574,6 +570,8 @@ class Controller(QObject):
             self.pg_bias.setXRange(0, 100, padding=None)
         else:
             self.pg_bias.setXRange(current_trial - 100, current_trial, padding=None)
+
+        self.models[self.cur_model].last_trial_plotted = current_trial
 
     def stopProgram(self):
         self.models[self.cur_model].run = False

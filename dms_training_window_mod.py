@@ -163,9 +163,10 @@ class Ui_trainingWindow:
         self.startButton.setGeometry(QtCore.QRect(680, 10, 211, 51))
         self.startButton.setObjectName("startButton")
 
-        self.giveWaterButton = QtWidgets.QPushButton(self.controlsGroup)
-        self.giveWaterButton.setGeometry(QtCore.QRect(190, 430, 112, 34))
-        self.giveWaterButton.setObjectName("giveWaterButton")
+        self.giveWaterToggle = QtWidgets.QPushButton(self.controlsGroup)
+        self.giveWaterToggle.setGeometry(QtCore.QRect(190, 430, 112, 34))
+        self.giveWaterToggle.setObjectName("giveWaterButton")
+        self.giveWaterToggle.setCheckable(True)
 
         # self.changeAnimalButton = QtWidgets.QPushButton(self.centralwidget)
         # self.changeAnimalButton.setGeometry(QtCore.QRect(900, 40, 51, 21))
