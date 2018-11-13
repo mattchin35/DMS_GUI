@@ -543,6 +543,9 @@ class Controller(QObject):
         else:  # miss
             symbolBrush = 'w'
 
+
+        print(trial_num, trial_type, choice, early, symbolBrush)
+
         if early == 1:
             symbolPen = symbolBrush
             symbolBrush = None

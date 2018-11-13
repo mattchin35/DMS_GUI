@@ -100,7 +100,7 @@ class DMSModel(QObject):
 
         # water output
         self.trials_to_water = 5
-        self.water_times = [.06, .06, .03, .03]
+        self.water_times = [.04, .04, .03, .03]
         self.give_water = False
         # DAQ output arrays
         self.all_low = [False] * 8
@@ -241,7 +241,7 @@ class DMSModel(QObject):
         else:
             tmp = np.exp(self.user_probabilities)
 
-        trial_type = np.random.choice(int(4), tmp)
+        trial_type = np.random.choice(4, p=tmp / np.sum(tmp))
         return trial_type
 
     def run_interval(self, delay):
