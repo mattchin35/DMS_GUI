@@ -28,11 +28,12 @@ class DMSModel(QObject):
     intReady = pyqtSignal(int)
     intervalTime = pyqtSignal(float)
 
-    def __init__(self, devices, testing=False, moving_ports=True):
+    def __init__(self, cd_ab, devices, testing=False, moving_ports=True):
         super().__init__()
         self.num_trial_types = 4
         self.testing = testing
         self.moving_ports = moving_ports
+        self.cd_ab = cd_ab
 
         # performance
         self.trial_num = 0
@@ -128,10 +129,17 @@ class DMSModel(QObject):
         self.blank = list(self.all_low)
         self.blank[7] = True
 
-        self.trial_dict = {0: [odor_c, odor_a],
+        cdab_trials = {0: [odor_c, odor_a],
                            1: [odor_c, odor_b],
                            2: [odor_d, odor_a],
                            3: [odor_d, odor_b]}
+
+        abab_trials = {0: [odor_a, odor_a],
+                           1: [odor_a, odor_b],
+                           2: [odor_b, odor_a],
+                           3: [odor_b, odor_b]}
+
+        self.trial_dict_list = [abab_trials, cdab_trials]
 
         lw = list(self.all_low)
         lw[0] = True
@@ -233,17 +241,7 @@ class DMSModel(QObject):
         else:
             tmp = np.exp(self.user_probabilities)
 
-        cdf = tmp / (np.sum(tmp) - tmp[self.trial_type])
-        cdf[self.trial_type] = 0
-        for i in range(1, cdf.shape[0]):
-            cdf[i] += cdf[i-1]
-
-        # sample from the cdf
-        p = np.random.rand()
-        trial_type = 0
-        while p > cdf[trial_type]:
-            trial_type += 1
-
+        trial_type = np.random.choice(int(4), tmp)
         return trial_type
 
     def run_interval(self, delay):
@@ -299,7 +297,7 @@ class DMSModel(QObject):
         t = 0
         # while t < self.odor_times[cue]:
         early = 0
-        self.output = list(self.trial_dict[self.trial_type][cue])
+        self.output = list(self.trial_dict_list[int(self.cd_ab)][self.trial_type][cue])
         self.write(1-cue)  # cue 0 means odors on daq 1, cue 1 means odors on daq 0
 
         while t < self.timing[2 + cue*2]:
@@ -361,16 +359,6 @@ class DMSModel(QObject):
         result = [0] * 4
         side = -1
         # choice = 0 - correct, 1 - error, 2 - switch, 3 - miss
-        self.output = self.go_cue
-        self.write(0)
-        while t < .15:
-            time.sleep(.001)
-            t = time.time() - st
-            self.update_indicator()
-
-        self.output = self.all_low
-        self.write(0)
-
         t = 0
         while t <= self.timing[self.cur_stage]:
             time.sleep(.001)
@@ -450,11 +438,9 @@ class DMSModel(QObject):
         # self.out_task.write()
 
     def shut_down(self):
-        self.out_tasks[0].stop()
-        self.out_tasks[1].stop()
+        [task.stop() for task in self.out_tasks]
+        [task.close() for task in self.out_tasks]
         self.in_task.stop()
-        self.out_tasks[0].close()
-        self.out_tasks[1].close()
         self.in_task.close()
 
     def save(self, event):
@@ -553,6 +539,19 @@ class DMSModel(QObject):
         x = np.exp(x - np.amax(x))  # normalization to max of 0
         return x / np.sum(x)
 
+    def run_go_cue(self):
+        self.output = self.go_cue
+        st = time.time()
+        t = 0
+        self.write(0)
+        while t < .15:
+            time.sleep(.001)
+            t = time.time() - st
+            self.update_indicator()
+
+        self.output = self.all_low
+        self.write(0)
+
     @pyqtSlot()
     def run_program(self):
         """Run the training program until the controller stops it."""
@@ -643,12 +642,23 @@ class DMSModel(QObject):
             # move lick ports to mouse
             if self.moving_ports:
                 self.devices.move_forward()
+                # time.sleep(.5)
+
+            self.run_go_cue()
+
+            if trials_to_water_counter >= self.trials_to_water:
+                self.give_water = True
 
             times[t_idx] = time.perf_counter()  # go tone
             t_idx += 1
-            choice, result, side = self.determine_choice()
-            if choice != 3:  # effective lick
+            if self.give_water:
+                choice, result, side = 0, [0] * 4, self.correct_choice
+                result[choice] = 1
                 times[t_idx] = time.perf_counter()
+            else:
+                choice, result, side = self.determine_choice()
+                if choice != 3:  # effective lick
+                    times[t_idx] = time.perf_counter()
 
             t_idx += 1
             perfect = np.maximum(result[0] - early, 0)
@@ -659,11 +669,13 @@ class DMSModel(QObject):
 
             if self.give_water:  # aka choice = 0
                 self.trial_type_progress[0] += 1
-                lick[2 + self.correct_choice] = 1
-                times[t_idx + self.correct_choice] = time.perf_counter()  # L/R reward
+                if side >=0:  # lick made 
+                    lick[2 + side] = 1
+                    times[t_idx + side] = time.perf_counter()  # L/R reward\
+
                 trials_to_water_counter = 0
-                self.deliver_water(early, side)
-            elif trials_to_water_counter >= self.trials_to_water:
+                self.deliver_water(early, self.correct_choice)
+            elif trials_to_water_counter >= self.trials_to_water:  # give water 
                 trials_to_water_counter = 0
                 self.deliver_water(early, side)
             else:
@@ -674,12 +686,13 @@ class DMSModel(QObject):
                 self.run_blank()
 
             t_idx += 2
+            # consumption time
+            self.run_interval(self.timing[-1])  # consumption time is last
             self.give_water = False
             self.update_performance(choice, result, early, lick)
             self.prepare_plot_data(choice, early)
 
-            # consumption time
-            self.run_interval(self.timing[-1])  # consumption time is last
+            
             # remove ports from mouse
             if self.moving_ports:
                 self.devices.move_backward()
@@ -736,7 +749,7 @@ class DMSModel(QObject):
 
 if __name__ == '__main__':
     devices = Devices(cd_ab=False, load_moving_ports=False)
-    dmsModel = DMSModel(devices, testing=False)
+    dmsModel = DMSModel(True, devices, testing=False)
     dmsModel.push_water()
     # dmsModel.test_odors()
     # model.motor_test(1)

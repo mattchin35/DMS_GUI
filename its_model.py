@@ -15,8 +15,8 @@ class ITSModel(DMSModel):
     """A Python implementation of the ITS program. Primary changes are the addition of motor control,
     the lack of odor delivery, and the delivery of water for any choice of lick port."""
 
-    def __init__(self, devices, testing=False, moving_ports=True, lr_moving_ports=False):
-        super().__init__(devices, testing, moving_ports)
+    def __init__(self, cd_ab, devices, testing=False, moving_ports=True, lr_moving_ports=False):
+        super().__init__(cd_ab, devices, testing, moving_ports)
 
         # iti, no lick, response, consumption
         if self.testing:

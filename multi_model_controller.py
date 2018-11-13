@@ -28,9 +28,10 @@ class Controller(QObject):
         # self.startUi = Ui_startWindow()
         self.trainingUi = Ui_trainingWindow(QMainWindow())
         self.forward_moving_ports = True
-        self.devices = Devices(cd_ab=True, load_moving_ports=self.forward_moving_ports)
-        dmsModel = DMSModel(self.devices, testing=False, moving_ports=self.forward_moving_ports)
-        itsModel = ITSModel(self.devices, testing=False, moving_ports=self.forward_moving_ports, lr_moving_ports=False)
+        cd_ab = True
+        self.devices = Devices(cd_ab=cd_ab, load_moving_ports=self.forward_moving_ports)
+        dmsModel = DMSModel(cd_ab, self.devices, testing=False, moving_ports=self.forward_moving_ports)
+        itsModel = ITSModel(cd_ab, self.devices, testing=False, moving_ports=self.forward_moving_ports, lr_moving_ports=True)
         if self.forward_moving_ports:
             self.devices.motors[1].move_to(self.devices.motors[1].position + 10)
 
