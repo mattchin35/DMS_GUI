@@ -16,19 +16,23 @@ class Devices:
 
     def __init__(self, opts):
         self.out_task_0 = ni.Task()
-        self.out_task_0.do_channels.add_do_chan('cDAQ2Mod1/port0/line0:7',
+        self.out_task_0.do_channels.add_do_chan('cDAQ2Mod1/port0/line0:4',
                                               line_grouping=LineGrouping.CHAN_PER_LINE)
         self.writer_0 = ni.stream_writers.DigitalMultiChannelWriter(self.out_task_0.out_stream)
         self.out_task_0.start()
         self.out_tasks = [self.out_task_0]
 
+        self.odor_out_task = ni.Task()
+        self.odor_out_task.do_channels.add_do_chan('cDAQ2Mod1/port0/line5:7',
+                                                line_grouping=LineGrouping.CHAN_PER_LINE)
+
         if opts.cd_ab:  # if using a box without 2-Daq setup and 4 odors for ITS
             self.out_task_1 = ni.Task()
-            self.out_task_1.do_channels.add_do_chan('cDAQ1Mod1/port0/line0:7',
+            self.out_task_1.do_channels.add_do_chan('cDAQ1Mod1/port0/line0:1',
                                                   line_grouping=LineGrouping.CHAN_PER_LINE)
-            self.writer_1 = ni.stream_writers.DigitalMultiChannelWriter(self.out_task_1.out_stream)
-            self.out_task_1.start()
-            self.out_tasks.append(self.out_task_1)
+
+        self.writer_1 = ni.stream_writers.DigitalMultiChannelWriter(self.out_task_1.out_stream)
+        self.out_task_1.start()
 
         self.in_task = ni.Task()
         self.in_task.di_channels.add_di_chan('Dev2/port0/line0:1',

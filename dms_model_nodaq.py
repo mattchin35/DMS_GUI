@@ -2,7 +2,7 @@ import time
 import numpy as np
 import nidaqmx as ni
 from nidaqmx.constants import LineGrouping
-from PyQt5.QtCore import QDate, QTime, QDateTime, Qt, pyqtSignal, pyqtSlot, QObject
+from PyQt5.QtCore import pyqtSignal, pyqtSlot, QObject
 import sys, os, csv, collections
 import thorlabs_apt as apt
 from utilities import Devices, Options
@@ -100,41 +100,44 @@ class DMSModel(QObject):
         self.water_times = [.04, .04, .03, .03]
         self.give_water = False
         # DAQ output arrays
-        self.all_low = [False] * 8
-        self.go_cue = [False] * 8
-        self.light = [False] * 8
-        self.siren = [False] * 8
+        self.all_low = [False] * 5
+        # self.all_low = [False] * 8
+        self.go_cue = list(self.all_low)
+        self.light = list(self.all_low)
+        self.siren = list(self.all_low)
 
         self.go_cue[2] = True
         self.light[3] = True
         self.siren[4] = True
 
+        self.blank = list(self.all_low)
+        self.blank[2] = True
+
         odor_a = list(self.all_low)  # list() can be used to make a copy
-        odor_a[5] = True
-        odor_a[7] = True
+        odor_a[0] = True
+        odor_a[2] = True
 
         odor_b = list(self.all_low)
-        odor_b[6] = True
-        odor_b[7] = True
+        odor_b[1] = True
+        odor_b[2] = True
 
         odor_c = list(self.all_low)
-        odor_c[0] = True
+        odor_c[3] = True
+        odor_a[2] = True
 
         odor_d = list(self.all_low)
-        odor_d[1] = True
-
-        self.blank = list(self.all_low)
-        self.blank[7] = True
+        odor_d[4] = True
+        odor_a[2] = True
 
         cdab_trials = {0: [odor_c, odor_a],
                            1: [odor_c, odor_b],
-                           2: [odor_d, odor_a],
-                           3: [odor_d, odor_b]}
+                           2: [odor_d, odor_b],
+                           3: [odor_d, odor_a]}
 
         abab_trials = {0: [odor_a, odor_a],
-                           1: [odor_a, odor_b],
-                           2: [odor_b, odor_a],
-                           3: [odor_b, odor_b]}
+                       1: [odor_a, odor_b],
+                       2: [odor_b, odor_a],
+                       3: [odor_b, odor_b]}
 
         self.trial_dict_list = [abab_trials, cdab_trials]
 
@@ -144,7 +147,7 @@ class DMSModel(QObject):
         rw[1] = True
 
         self.water_daq = [lw, rw]
-        self.output = [False] * 8
+        self.output = list(self.all_low)
         time.perf_counter()
 
         self.lickSideCounter = [0]*2
@@ -274,7 +277,7 @@ class DMSModel(QObject):
         # while t < self.odor_times[cue]:
         early = 0
         self.output = list(self.trial_dict_list[int(self.cd_ab)][self.trial_type][cue])
-        self.write(1-cue)  # cue 0 means odors on daq 1, cue 1 means odors on daq 0
+        self.write(1)
 
         while t < self.timing[2 + cue*2]:
             # cue is 0 (first odor) or 1 (second odor); odor stages are 2 or 4
@@ -294,7 +297,6 @@ class DMSModel(QObject):
             # early = np.random.randint(2)
 
         self.output = list(self.all_low)
-        self.write(0)
         self.write(1)
         return early
 
@@ -313,10 +315,14 @@ class DMSModel(QObject):
         self.output = list(self.all_low)
         self.write(0)
 
-    def write(self, daq):  # a cleaner function to call
+    def write(self, task):  # a cleaner function to call
         # self.writer.write_one_sample_multi_line(self.output)
+        # determine which daq to use
         if not self.testing:
-            self.out_tasks[daq].write(self.output)
+            if task == 0:  # water, light and sound control
+                self.out_tasks[0].write(self.output)
+            else:  # odor control
+                self.out_tasks[1].write(self.output)
 
     def determine_choice(self):
         """
