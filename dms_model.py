@@ -157,7 +157,8 @@ class DMSModel(QObject):
 
         self.motors = devices.motors
         self.out_tasks = devices.out_tasks
-        self.in_tasks = devices.in_tasks
+        self.in_task = devices.in_task
+        self.dev_out_task_0 = devices.dev_out_task_0
         self.reader = devices.reader
         self.devices = devices
         self.last_trial_plotted = -1
@@ -219,7 +220,7 @@ class DMSModel(QObject):
         """Sample a trial type from the full set of trials, minus the current trial type."""
         # create a cumulative distribution function
         if self.use_user_probs:
-            tmp = self.probabilties
+            tmp = self.probabilities
         else:
             tmp = self.user_probabilities
 
@@ -316,9 +317,9 @@ class DMSModel(QObject):
         if not self.opts.testing:
             self.out_tasks[daq].write(self.output)
 
-    def write_dev_port(self, port):
+    def write_dev_port(self):
         if not self.opts.testing:
-            self.in_tasks[port].write(self.output)
+            self.dev_out_task_0.write(self.output)
 
     def determine_choice(self):
         """
@@ -511,14 +512,14 @@ class DMSModel(QObject):
         self.output = self.error_noise
         st = time.perf_counter()
         t = 0
-        self.write_dev_port(1)
+        self.write_dev_port()
         while t < .5:
             time.sleep(.001)
             t = time.perf_counter() - st
             self.update_indicator()
 
         self.output = self.dev_low[0]
-        self.write_dev_port(1)
+        self.write_dev_port()
 
     @pyqtSlot()
     def run_program(self):
