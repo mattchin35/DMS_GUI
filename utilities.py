@@ -37,16 +37,13 @@ class Devices:
                                              line_grouping=LineGrouping.CHAN_PER_LINE)
         self.reader = ni.stream_readers.DigitalMultiChannelReader(self.in_task.in_stream)
         self.in_task.start()
-        self.in_tasks = [self.in_task]
 
-        self.in_task_1 = ni.Task()
-        self.in_task_1.do_channels.add_do_chan('Dev1/port1/line1',
-                                             line_grouping=LineGrouping.CHAN_PER_LINE)
-        self.reader_1 = ni.stream_writers.DigitalMultiChannelWriter(self.in_task_1.out_stream)
-        self.in_task_1.start()
-        self.in_tasks.append(self.in_task_1)
-
-        # add dev1/port1/line1 for error beep
+        # Writer for error noise
+        self.dev_out_task_0 = ni.Task()
+        self.dev_out_task_0.do_channels.add_do_chan('Dev1/port1/line1',
+                                                    line_grouping=LineGrouping.CHAN_PER_LINE)
+        self.dev_writer_0 = ni.stream_writers.DigitalMultiChannelWriter(self.dev_out_task_0.out_stream)
+        self.dev_out_task_0.start()
 
         # MOTOR
         # if not self.testing:
