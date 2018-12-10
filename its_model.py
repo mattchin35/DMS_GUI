@@ -3,7 +3,7 @@ import numpy as np
 import nidaqmx as ni
 from PyQt5.QtCore import pyqtSlot
 import sys, os, csv, collections
-from dms_model_nodaq import DMSModel
+from dms_model import DMSModel
 
 
 class ITSModel(DMSModel):
