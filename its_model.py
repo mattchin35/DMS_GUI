@@ -75,7 +75,7 @@ class ITSModel(DMSModel):
             t = time.time() - st
             self.update_indicator()
 
-        self.output = self.all_low
+        self.output = self.all_low[0]
         self.write(0)
 
         t = 0
@@ -141,7 +141,7 @@ class ITSModel(DMSModel):
             self.update_indicator()
 
         print('water delivered')
-        self.output = list(self.all_low)
+        self.output = list(self.all_low[0])
         self.write(0)
 
     @pyqtSlot()
@@ -174,11 +174,11 @@ class ITSModel(DMSModel):
 
             time.sleep(.001)  # need sleep time for graph
             self.elapsed_time *= 0
-            self.choose_random_trial()
+            self.choose_next_trial()
+            print('hi bound', self.random_hi_bound)
             self.trial_type_progress[1] += 1
             print('trial type', self.trial_type)
 
-            self.trial_num += 1
             # self.startTrialSignal.signal.emit()
             self.startTrialSignal.emit()
 
@@ -249,6 +249,7 @@ class ITSModel(DMSModel):
             self.give_water = False
             self.update_performance(choice, result, early, lick)
             self.prepare_plot_data(choice, early)
+            print('num trials recorded', len(self.trial_array))
 
             # consumption time
             self.run_interval(self.timing[-1])  # consumption time is last
@@ -275,6 +276,7 @@ class ITSModel(DMSModel):
                 self.lick_side_counter *= 0
 
             self.endTrialSignal.emit()
+            self.trial_num += 1
             if self.testing:
                 print('by stimulus:\n', self.performance_stimulus)
                 print('overall\n', self.performance_overall)

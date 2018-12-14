@@ -7,7 +7,7 @@ import sys, os, csv, collections
 import thorlabs_apt as apt
 from utilities import Devices, Options
 
-np.random.seed(2)
+# np.random.seed(2)
 EPS = np.finfo(float).eps
 
 
@@ -30,7 +30,7 @@ class DMSModel(QObject):
         super().__init__()
         self.num_trial_types = 4
         self.opts = opts
-        # self.testing = opts.testing
+        self.testing = opts.testing
         # self.cd_ab = opts.cd_ab
         self.moving_ports = opts.forward_moving_ports
 
@@ -56,9 +56,9 @@ class DMSModel(QObject):
 
         # Trial selection
         self.trial_type = 0  # current trial type
-        self.random_hi_bound = -1  # starting value
         self.low_bounds = np.ones(self.num_trial_types)
         self.hi_bounds = np.ones(self.num_trial_types) * 3
+        self.random_hi_bound = np.random.randint(self.low_bounds[self.trial_type], self.hi_bounds[self.trial_type] + 1)  # starting value
         self.structure = 2  # 0 for CA/CB, 1 for DB/DA, 2 for Full
         self.trial_type_progress = np.zeros(2)  # correct count, total number of trial type seen
         self.probabilities = np.ones(self.num_trial_types) / self.num_trial_types
@@ -175,14 +175,14 @@ class DMSModel(QObject):
 
     def choose_next_trial(self):
         move = False
-        if self.trial_type_progress[1] >= self.strict_ub or self.trial_type_progress[0] >= self.hi_bounds[
-            self.trial_type]:
+        if self.random:
+            if self.trial_type_progress[1] >= self.random_hi_bound:
+                move = True
+        elif self.trial_type_progress[1] >= self.strict_ub or self.trial_type_progress[0] >= self.hi_bounds[self.trial_type]:
             move = True
         # potentially move to the next trial type if current progress is greater than minimum
-        elif self.trial_type_progress[0] >= self.low_bounds[self.trial_type]:
-            # move to the next trial if greater than the trial maximum or the random bound
-            if self.trial_type_progress[0] >= self.random_hi_bound:
-                move = True
+        elif self.trial_type_progress[0] >= self.random_hi_bound:
+            move = True
 
         if move:
             if self.structure == 0:  # AA/AB
@@ -220,13 +220,14 @@ class DMSModel(QObject):
         """Sample a trial type from the full set of trials, minus the current trial type."""
         # create a cumulative distribution function
         if self.use_user_probs:
-            tmp = self.probabilities
-        else:
             tmp = self.user_probabilities
+        else:
+            tmp = self.probabilities
 
-        tmp[self.trial_type] = 0  # do not allow current trial to repeat
+        tmp[self.trial_type] /= 3  # make repeats unlikely
         tmp /= np.sum(tmp)
         trial_type = np.random.choice(4, p=tmp)
+        print('old and new trials', self.trial_type, trial_type)
         return trial_type
 
     def run_interval(self, delay):
@@ -642,9 +643,9 @@ class DMSModel(QObject):
                 self.deliver_water(early)
             elif trials_to_water_counter >= self.trials_to_water:  # give water
                 trials_to_water_counter = 0
-                self.deliver_water(early, side)
+                self.deliver_water(early)
             elif choice == 1 or choice == 2:
-                # increase trials-to-water counter
+                # increase trials-to-water counte
                 trials_to_water_counter += 1
                 self.run_error_noise()
             else:  # for miss
@@ -666,8 +667,8 @@ class DMSModel(QObject):
             times[t_idx] = 'NaN'
             t_idx += 1  # 'noise_onset'
             times[t_idx] = time.perf_counter()  # trial_end
-            events += [perfect] + result + [early] + lick + times + [
-                self.give_water] + self.hi_bounds.tolist() + self.low_bounds.tolist()
+            human = [self.give_water] + self.hi_bounds.tolist() + self.low_bounds.tolist()
+            events += [perfect] + result + [early] + lick + times + human
 
             self.endTrialSignal.emit()
             self.trial_num += 1
@@ -705,7 +706,7 @@ class DMSModel(QObject):
         self.correct_choice = 0
         self.deliver_water(0)
         self.correct_choice = 1
-        # self.deliver_water(0)
+        self.deliver_water(0)
 
     def test_odors(self):
         self.trial_type = 0

@@ -332,9 +332,9 @@ class Controller(QObject):
             return
         trial_struct = self.trainingUi.trialStructureComboBox.currentText()
         self.trainingUi.trialStructTextBrowser.setText(trial_struct)
-        self.models[self.cur_model].trial_type_progress *= 0
         if trial_struct == 'Random':
             self.models[self.cur_model].random = True
+            self.models[self.cur_model].trial_type_progress[1] = self.models[self.cur_model].strict_ub
         elif trial_struct == 'Alternating':
             self.models[self.cur_model].random = False
 
@@ -517,14 +517,13 @@ class Controller(QObject):
 
     def probEditChanges(self, idx):
         try:
-            newsum = np.sum(self.models[self.cur_model].user_probabilities[:3]) - \
-                     self.models[self.cur_model].user_probabilities[idx] \
-                     + float(self.customProbability[idx].text())
-            if newsum <= 1:
-                self.models[self.cur_model].user_probabilities[idx] = float(self.customProbability[idx].text())
-                self.models[self.cur_model].user_probabilities[3] = 1 - np.sum(
-                    self.models[self.cur_model].user_probabilities[:3])
-                self.customProbability[3].setText("{:.2f}".format(self.models[self.cur_model].user_probabilities[3]))
+            px =  float(self.customProbability[idx].text())
+            tmp = self.models[self.cur_model].user_probabilities
+            tmp[idx] = px
+            if np.sum(tmp[:3]) <= 1:
+                tmp[3] = 1 - np.sum(tmp[:3])
+                self.models[self.cur_model].user_probabilities = tmp
+                self.customProbability[3].setText("{:.2f}".format(tmp[3]))
             else:
                 self.invalidInputMsg()
         except:
@@ -533,7 +532,8 @@ class Controller(QObject):
     def endTrialInputs(self):
         self.plot()
         self.changeDataTables()
-        if self.cur_model == 1:  # ITS
+        if self.cur_model == 1:  # ITS.3
+
             ix = self.models[self.cur_model].delay_ix
             self.trainingUi.earlyLickCheckTimeLineEdit.setText("{:.3f}".format(self.models[self.cur_model].timing[ix]))
 
@@ -592,6 +592,7 @@ class Controller(QObject):
 
         # trial_num, trial_type, choice, early = self.models[self.cur_model].trial_array[-1]
         trials = self.models[self.cur_model].trial_array[self.models[self.cur_model].last_trial_plotted + 1:]
+        print('num trials to plot:', len(trials))
         # Trial-by-Trial Graphic
         # self.pg_trialByTrial.plot([current_trial], [trial_type], pen=None, symbolBrush=symbolBrush, symbolPen=symbolPen)
         for trial_num, trial_type, choice, early in trials:

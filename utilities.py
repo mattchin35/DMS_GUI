@@ -56,20 +56,35 @@ class Devices:
             # print(devices)
             motor_1 = apt.Motor(devices[1][1])  # forward motor
             param = motor_1.get_velocity_parameters()
-            motor_1.set_velocity_parameters(param[0], 1e3, 200)
+            # motor_1.set_velocity_parameters(param[0], 1e3, 200)
             self.motors.append(motor_1)
 
     def move_forward(self):
-        self.motors[1].move_by(-self.forward_motor_step)
+        try:
+            self.motors[1].move_by(-self.forward_motor_step)
+        except:
+            message = "Out-of-range position entered to forward motor. The motor must be moved backwards."
+            print(message)
 
     def move_backward(self):
-        self.motors[1].move_by(self.forward_motor_step)
+        try:
+            self.motors[1].move_by(self.forward_motor_step)
+        except:
+            message = "Out-of-range position entered to forward motor. The motor must be moved forward."
+            print(message)
+        
 
     def move_lr(self, side):
-        if side == 0:  # left
-            self.motors[0].move_by(-self.sideways_motor_step)
-        else:
-            self.motors[0].move_by(self.sideways_motor_step)
+        try:
+            if side == 0:  # left
+                # self.motors[0].move_by(-self.sideways_motor_step)
+                self.motors[0].move_to(self.motors[0].position-self.sideways_motor_step)
+            else:
+                self.motors[0].move_by(self.sideways_motor_step)
+        except:
+            message = "Out-of-range position entered to sideways motor. Return the motor to the center."
+            print(message)
+        
 
     def motor_test(self, ix):
         # self.motors[ix].move_velocity(2)
@@ -94,4 +109,6 @@ class Devices:
 if __name__ == '__main__':
     opts = Options()
     devices = Devices(opts)
-    devices.motor_test(1)
+    # devices.motor_test(1)
+    # devices.move_lr(0)
+    devices.move_forward()
