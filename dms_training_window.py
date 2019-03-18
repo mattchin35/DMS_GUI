@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'dms_training_window.ui'
+# Form implementation goenerated from reading ui file 'dms_training_window.ui'
 #
 # Created by: PyQt5 UI code generator 5.6
 #
@@ -10,6 +10,7 @@
 from PyQt5 import QtCore, QtGui, QtWidgets, Qt
 import pyqtgraph as pg
 import numpy as np
+# from utilities import *
 # QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, False)
 # QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps, False)
 
@@ -33,9 +34,11 @@ class Ui_trainingWindow:
         print(scale)
 
         font = QtGui.QFont()
+        # self.stdFont = self.trialNumLabel.font()
+        print(f'default font: {font.pointSize()} pt, {font.pixelSize()} px')
         # font.setPointSize(14 * scale[1])
         # font.setPointSize(10)# * scale[1])
-        font.setPointSize(13)
+        # font.setPointSize(13)
         self.font = QtGui.QFont(font)
 
         font.setBold(True)
@@ -238,9 +241,6 @@ class Ui_trainingWindow:
         self.trialNumLabel = QtWidgets.QLabel("Trial No.:")
         self.trialNumLabel.setObjectName("trialNumLabel")
 
-        self.stdFont = self.trialNumLabel.font()
-        print(f'default font: {self.stdFont.pointSize()} pt, {self.stdFont.pixelSize()} px')
-
         self.trialTypeLabel = QtWidgets.QLabel("Trial Type:")
         self.trialTypeLabel.setObjectName("trialTypeLabel")
 
@@ -420,32 +420,32 @@ class Ui_trainingWindow:
         self.automateComboBox.setObjectName("automateComboBox")
         self.automateComboBox.addItem("Manual")
         self.automateComboBox.addItem("Automate")
-        self.automateComboBox.setMinimumSize(1, 1)
+        # self.automateComboBox.setMinimumSize(1, 1)
 
         self.trialStructureComboBox = QtWidgets.QComboBox()
         self.trialStructureComboBox.setObjectName("trialStructureComboBox")
         self.trialStructureComboBox.addItem("Alternating")
         self.trialStructureComboBox.addItem("Random")
-        self.trialStructureComboBox.setMinimumSize(1, 1)
+        # self.trialStructureComboBox.setMinimumSize(1, 1)
 
         self.useUserProbComboBox = QtWidgets.QComboBox()
         self.useUserProbComboBox.setObjectName("trialStructureComboBox")
         self.useUserProbComboBox.addItem("Automatic")
         self.useUserProbComboBox.addItem("Custom")
-        self.useUserProbComboBox.setMinimumSize(1, 1)
+        # self.useUserProbComboBox.setMinimumSize(1, 1)
 
         self.trialTypeComboBox = QtWidgets.QComboBox()
         self.trialTypeComboBox.setObjectName("trialTypeComboBox")
         self.trialTypeComboBox.addItem("Full")
         self.trialTypeComboBox.addItem("AA/AB")
-        self.trialTypeComboBox.setMinimumSize(1, 1)
+        # self.trialTypeComboBox.setMinimumSize(1, 1)
 
         self.trialTimelineComboBox = QtWidgets.QComboBox()
         self.trialTimelineComboBox.setObjectName("trialTimelineComboBox")
         self.trialTimelineComboBox.addItem("Standard Structure")
         self.trialTimelineComboBox.addItem("Learning Structure")
         self.trialTimelineComboBox.addItem("Delay = 2000ms")
-        self.trialTimelineComboBox.setMinimumSize(1, 1)
+        # self.trialTimelineComboBox.setMinimumSize(1, 1)
 
         # LINE EDITS #
         self.aaProbabilityLineEdit = QtWidgets.QLineEdit()
@@ -848,7 +848,7 @@ class Ui_trainingWindow:
         controlsVBar.addLayout(waterLayout, 1)
         controlsVBar.addWidget(self.controlsLine3)
         controlsVBar.addLayout(earlyLickLayout)
-        # controlsVBar.setSpacing(10*scale[1])
+        controlsVBar.setSpacing(10)
 
         self.controlsGroup.setLayout(controlsVBar)
 

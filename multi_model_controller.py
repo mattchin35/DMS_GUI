@@ -15,14 +15,15 @@ skipStartUi = 1
 
 
 class Controller(QObject):
-
-    def __init__(self):
+ 
+    def __init__(self, app):
         super().__init__()
         # self.setupUi(self)
         # self.startUi = Ui_startWindow()
         self.opts = Options()
+        self.opts.forward_moving_ports = False
         # self.opts.testing = True
-        self.trainingUi = Ui_trainingWindow(QMainWindow(), self.opts)
+        self.trainingUi = Ui_trainingWindow(QMainWindow(), self.opts, app)
         self.trainingUi.setOdorLabels()
         self.devices = Devices(self.opts)
         dmsModel = DMSModel(self.opts, self.devices)
@@ -30,15 +31,15 @@ class Controller(QObject):
         # if self.forward_moving_ports:
         #     self.devices.motors[1].move_to(self.devices.motors[1].position + 10)
 
-        self.thread = QThread()
+        self.thread  = QThread()
         dmsModel.moveToThread(self.thread)
         itsModel.moveToThread(self.thread)
         self.models = [dmsModel, itsModel]
-        self.cur_model = 0
+        self.cur_model = 0 
 
         self.showTrainingUi()
 
-    #   START UI [not in use right now]
+    #   START UI [not in use right now]  
     def showStartUi(self):
         self.startUi.setupUi(self)
         self.startUi.goButton.clicked.connect(self.goButtonStartUi)
@@ -100,7 +101,7 @@ class Controller(QObject):
 
         self.trainingUi.trialsToWaterLineEdit.setText("{}".format(self.models[self.cur_model].trials_to_water))
 
-        #   BUTTON SIGNALS
+        #   BUTTON SIGNALS 
         # self.trainingUi.backButton.clicked.connect(self.showStartUi)
         self.trainingUi.changePathButton.clicked.connect(self.changeDirTraining)
         self.trainingUi.startButton.clicked.connect(self.models[self.cur_model].run_program)
@@ -114,6 +115,13 @@ class Controller(QObject):
         self.stimBoundButtons[1].clicked.connect(lambda: self.setAllStimBounds(1))
         self.stimBoundButtons[2].clicked.connect(lambda: self.setAllStimBounds(2))
         self.stimBoundButtons[3].clicked.connect(lambda: self.setAllStimBounds(3))
+
+        self.waterTimeButtons = [self.trainingUi.increaseWaterButton, self.trainingUi.decreaseWaterButton,
+                                 self.trainingUi.increaseEarlyWaterButton, self.trainingUi.decreaseEarlyWaterButton]
+        self.waterTimeButtons[0].clicked.connect(lambda: self.setWaterTimes(0))
+        self.waterTimeButtons[1].clicked.connect(lambda: self.setWaterTimes(1))
+        self.waterTimeButtons[2].clicked.connect(lambda: self.setWaterTimes(2))
+        self.waterTimeButtons[3].clicked.connect(lambda: self.setWaterTimes(3))
 
         #   DROPDOWN LISTS
         self.trainingUi.trialStructureComboBox.currentTextChanged.connect(self.changeTrialStruct)
@@ -216,6 +224,7 @@ class Controller(QObject):
         self.pg_trialByTrial = self.trainingUi.trialByTrialGraphic
         self.pg_correctP = self.trainingUi.correctTrialsGraphic
         self.pg_bias = self.trainingUi.biasGraphic
+        self.pg_early = self.trainingUi.earlyLickPerformanceGraphic
 
         self.pg_trialByTrial.setMouseEnabled(x=True, y=False)
         self.pg_correctP.setMouseEnabled(x=True, y=False)
@@ -288,6 +297,21 @@ class Controller(QObject):
             self.trainingUi.abLowerLineEdit.setText(str(val))
             self.trainingUi.bbLowerLineEdit.setText(str(val))
             self.trainingUi.baLowerLineEdit.setText(str(val))
+
+    def setWaterTimes(self, ix):
+        cur_model = self.models[self.cur_model]
+        if ix == 0:
+            cur_model.water_times[:2] += .02
+        elif ix == 1:
+            cur_model.water_times[:2] -= .02
+        elif ix == 2:   
+            cur_model.water_times[2:] += .02
+        else:  # ix == 3
+            cur_model.water_times[2:] -= .02
+
+        for i in range(4):
+            self.waterBoxes[i].setText(str(np.round(cur_model.water_times[i],3)))
+            # self.waterBoxes[i].setText(str(float(cur_model.water_times[i])))
 
     def lickIndicator(self):
         ind = self.models[self.cur_model].indicator.flatten()
@@ -391,11 +415,14 @@ class Controller(QObject):
         odors = self.trainingUi.odorTypeComboBox.currentText()
         if odors == "CD/AB":
             self.opts.cd_ab = True
+            print("CDAB")
         else:
             self.opts.cd_ab = False
+            print("ABAB")
 
         self.trainingUi.setOdorLabels()
         print(self.models[self.cur_model].opts.cd_ab)
+        print('odors changed')
         # self.models[self.cur_model].cd_ab = self.opts.cd_ab
 
     def changeTaskType(self):  # mod
@@ -522,7 +549,7 @@ class Controller(QObject):
             tmp[idx] = px
             if np.sum(tmp[:3]) <= 1:
                 tmp[3] = 1 - np.sum(tmp[:3])
-                self.models[self.cur_model].user_probabilities = tmp
+                self.models[self.cur_model].user_probabilities = tmp# basement code built on 1920 x 1160 screen
                 self.customProbability[3].setText("{:.2f}".format(tmp[3]))
             else:
                 self.invalidInputMsg()
@@ -588,10 +615,11 @@ class Controller(QObject):
     def plot(self):
         current_trial = self.models[self.cur_model].trial_num
         brushes = ['g', 'r', 'y', 'w']
-        print('lastplot', self.models[self.cur_model].last_trial_plotted)
 
-        # trial_num, trial_type, choice, early = self.models[self.cur_model].trial_array[-1]
-        trials = self.models[self.cur_model].trial_array[self.models[self.cur_model].last_trial_plotted + 1:]
+        # trial_num, trial_type, choice, early = self.models[self.cur_model].trial_array
+        lastplot_ix = self.models[self.cur_model].last_trial_plotted
+        print('lastplot', lastplot_ix)
+        trials = self.models[self.cur_model].trial_array[lastplot_ix + 1:]
         print('num trials to plot:', len(trials))
         # Trial-by-Trial Graphic
         # self.pg_trialByTrial.plot([current_trial], [trial_type], pen=None, symbolBrush=symbolBrush, symbolPen=symbolPen)
@@ -599,8 +627,8 @@ class Controller(QObject):
             symbolBrush = brushes[choice]
             symbolPen = None
             if early == 1:
-                symbolBrush = None
                 symbolPen = symbolBrush
+                symbolBrush = None
 
             self.pg_trialByTrial.plot([trial_num], [trial_type],
                                       pen=None, symbolBrush=symbolBrush, symbolPen=symbolPen)
@@ -625,6 +653,14 @@ class Controller(QObject):
             self.pg_bias.setXRange(0, 100, padding=None)
         else:
             self.pg_bias.setXRange(current_trial - 100, current_trial, padding=None)
+
+        # Early Lick
+        self.pg_early.plot(self.models[self.cur_model].early_avg, pen='r', symbol=None, clear=True)
+        if current_trial < 101:
+            self.pg_early.setXRange(0, 100, padding=None)
+        else:
+            self.pg_early.setXRange(current_trial - 100, current_trial, padding=None)
+
 
     def stopProgram(self):
         self.models[self.cur_model].run = False
@@ -686,7 +722,7 @@ sys.excepthook = my_exception_hook
 if __name__ == '__main__':
     app = QApplication(sys.argv)
 
-    window = Controller()
+    window = Controller(app)
 
     # sys.exit(app.exec_())
 

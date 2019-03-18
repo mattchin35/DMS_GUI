@@ -96,10 +96,12 @@ class DMSModel(QObject):
 
         self.early_lick_check = False
         self.early_lick_time = 0.0
+        self.early_tracker = []
+        self.early_avg = []
 
         # water output
         self.trials_to_water = 5
-        self.water_times = [.04, .04, .03, .03]
+        self.water_times = np.array([.06, .06, .05, .05])
         self.give_water = False
         # DAQ output arrays
         self.all_low = [[False] * 8, [False] * 2]
@@ -120,7 +122,7 @@ class DMSModel(QObject):
 
         odor_b = list(self.all_low[0])
         odor_b[6] = True
-        odor_a[7] = True
+        odor_b[7] = True
 
         odor_c = list(self.all_low[1])
         odor_c[0] = True
@@ -224,7 +226,7 @@ class DMSModel(QObject):
         else:
             tmp = self.probabilities
 
-        tmp[self.trial_type] /= 3  # make repeats unlikely
+        tmp[self.trial_type] /= 10  # make repeats unlikely
         tmp /= np.sum(tmp)
         trial_type = np.random.choice(4, p=tmp)
         print('old and new trials', self.trial_type, trial_type)
@@ -446,24 +448,27 @@ class DMSModel(QObject):
         self.last_trial_plotted = -1
 
     def update_probabilities(self):
-        perc_corr = self.performance_stimulus[:, 2] / (self.performance_stimulus[:, 0] + np.finfo(float).eps)
-        avg_perc_correct = np.mean(perc_corr)
-        diff = perc_corr - avg_perc_correct
-        diff *= 2 / self.num_trial_types
-        p = np.ones(self.num_trial_types) / self.num_trial_types - diff
-        if np.sum(np.isnan(p)) > 0:
-            # print("fail")
-            return
-        else:
-            self.probabilities = self.softmax(p)
-            print("Probabilities: ", self.probabilities)
+        if self.trial_num > 30:
+            perc_corr = self.performance_stimulus[:, 2] / (self.performance_stimulus[:, 0] + np.finfo(float).eps)
+            self.probabilities = self.sum_normalize(1-perc_corr)
+        # avg_perc_correct = np.mean(perc_corr)
+        # diff = perc_corr - avg_perc_correct
+        # diff *= 2 / self.num_trial_types
+        # p = np.ones(self.num_trial_types) / self.num_trial_types - diff
+        # if np.sum(np.isnan(p)) > 0:
+        #     # print("fail")
+        #     return
+        # else:
+        #     # self.probabilities = self.softmax(p)
+        #     self.probabilities = self.sum_normalize(p)
+        print("Probabilities: ", self.probabilities)
 
     def prepare_plot_data(self, choice, early):
         self.trial_array.append((self.trial_num, self.trial_type, choice, early))
-        if self.trial_num < 30:
-            tmp = self.trial_correct_history
-        else:
-            tmp = self.trial_correct_history[-30:]
+        self.early_tracker.append(early)
+        st = max(0,self.trial_num-30)   
+        self.early_avg = np.mean(self.early_tracker[st:])
+        tmp = self.trial_correct_history[st:]
         # self.correct_avg.append(np.sum(tmp[tmp == 0]) / len(tmp) * 100)
         self.correct_avg.append(collections.Counter(tmp)[0] / (len(tmp) + np.finfo(float).eps) * 100)
         self.bias.append(self.performance_overall[5, 0] - self.performance_overall[6, 0])
@@ -494,6 +499,11 @@ class DMSModel(QObject):
     @staticmethod
     def softmax(x):
         x = np.exp(x - np.amax(x))  # normalization to max of 0
+        return x / np.sum(x)
+
+    
+    @staticmethod
+    def sum_normalize(x):
         return x / np.sum(x)
 
     def run_go_cue(self):
@@ -548,7 +558,11 @@ class DMSModel(QObject):
                                          'miss', 'early_lick', 'left', 'right', 'L_reward', 'R_reward', 'ITI_start',
                                          'trial_start', 'stimulus_start', '1st_odor_onset', 'delay_onset',
                                          '2nd_odor_onset', '2nd_delay_onset', 'Go_tone', 'effective_lick',
-                                         'L_reward', 'R_reward', 'noise_onset', 'trial_end'])
+                                         'L_reward', 'R_reward', 'noise_onset', 'trial_end', 'AA_hi', 'AB_hi', 'BB_hi', 'BA_hi',
+                                         'AA_lo', 'AB_lo', 'BB_lo', 'BA_lo', 'left_w ater_time', 'right_water_time', 'early_left_water',
+                                         'early_right_water'])
+
+                        self.water_times
 
                     with open(self.licking_file, 'w', newline='') as f:
                         writer = csv.writer(f)
@@ -667,7 +681,7 @@ class DMSModel(QObject):
             times[t_idx] = 'NaN'
             t_idx += 1  # 'noise_onset'
             times[t_idx] = time.perf_counter()  # trial_end
-            human = [self.give_water] + self.hi_bounds.tolist() + self.low_bounds.tolist()
+            human = [self.give_water] + self.hi_bounds.tolist() + self.low_bounds.tolist() + self.water_times
             events += [perfect] + result + [early] + lick + times + human
 
             self.endTrialSignal.emit()
@@ -702,7 +716,7 @@ class DMSModel(QObject):
         print('posn', self.motors[ix].position)
 
     def push_water(self):
-        # self.water_times = [.06, .06, .03, .03]
+        self.water_times = [.5, .5, .03, .03]
         self.correct_choice = 0
         self.deliver_water(0)
         self.correct_choice = 1
@@ -716,6 +730,8 @@ class DMSModel(QObject):
         # self.trial_type = 3
         # self.run_odor(0)
         # self.run_odor(1)
+
+
 
 
 if __name__ == '__main__':
