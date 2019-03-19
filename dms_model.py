@@ -222,11 +222,11 @@ class DMSModel(QObject):
         """Sample a trial type from the full set of trials, minus the current trial type."""
         # create a cumulative distribution function
         if self.use_user_probs:
-            tmp = self.user_probabilities
+            tmp = self.user_probabilities.copy()
         else:
-            tmp = self.probabilities
+            tmp = self.probabilities.copy()
 
-        tmp[self.trial_type] /= 10  # make repeats unlikely
+        tmp[self.trial_type] /= 5  # make repeats unlikely
         tmp /= np.sum(tmp)
         trial_type = np.random.choice(4, p=tmp)
         print('old and new trials', self.trial_type, trial_type)
@@ -389,8 +389,6 @@ class DMSModel(QObject):
                     side = 1 - self.correct_choice
                     self.give_water = False
                 break
-
-        self.trial_correct_history.append(choice)
         result[choice] = 1
         return choice, result, side
 
@@ -449,7 +447,50 @@ class DMSModel(QObject):
 
     def update_probabilities(self):
         if self.trial_num > 30:
-            perc_corr = self.performance_stimulus[:, 2] / (self.performance_stimulus[:, 0] + np.finfo(float).eps)
+            tr_type = np.array(self.trial_type_history)
+            tr_corr = np.array(self.trial_correct_history) == 0
+            aa = tr_type == 0
+            ab = tr_type == 1
+            bb = tr_type == 2
+            ba = tr_type == 3
+
+            # st = max(0, self.trial_num-30)
+            # aa_corr = tr_corr * aa
+            # ab_corr = tr_corr * ab
+            # bb_corr = tr_corr * bb
+            # ba_corr = tr_corr * ba
+
+            aa_corr = tr_corr[aa]
+            if len(aa_corr) > 0:
+                aa_st = max(len(aa_corr)-30, 0)
+                aa_p = np.mean(aa_corr[aa_st:])
+            else: 
+                aa_p = 0
+
+            ab_corr = tr_corr[ab]
+            if len(ab_corr) > 0:
+                ab_st = max(len(ab_corr)-30, 0)
+                ab_p = np.mean(ab_corr[ab_st:])
+            else:
+                ab_p = 0
+
+            bb_corr = tr_corr[bb]
+            if len(bb_corr) > 0:
+                bb_st = max(len(bb_corr)-30, 0)
+                bb_p = np.mean(bb_corr[bb_st:])
+            else:
+                bb_p = 0
+
+            ba_corr = tr_corr[ba]
+            if len(ba_corr) > 0:
+                ba_st = max(len(ba_corr)-30, 0)
+                ba_p = np.mean(ba_corr[ba_st:])
+            else:
+                ba_p = 0
+
+            perc_corr = np.array([aa_p, ab_p, bb_p, ba_p])
+            # perc_corr[np.isnan(perc_corr)] = 0
+            # perc_corr = self.performance_stimulus[:, 2] / (self.performance_stimulus[:, 0] + np.finfo(float).eps)
             self.probabilities = self.sum_normalize(1-perc_corr)
         # avg_perc_correct = np.mean(perc_corr)
         # diff = perc_corr - avg_perc_correct
@@ -461,13 +502,13 @@ class DMSModel(QObject):
         # else:
         #     # self.probabilities = self.softmax(p)
         #     self.probabilities = self.sum_normalize(p)
-        print("Probabilities: ", self.probabilities)
+            print("Probabilities: ", self.probabilities)
 
     def prepare_plot_data(self, choice, early):
         self.trial_array.append((self.trial_num, self.trial_type, choice, early))
         self.early_tracker.append(early)
         st = max(0,self.trial_num-30)   
-        self.early_avg = np.mean(self.early_tracker[st:])
+        self.early_avg.append(np.mean(self.early_tracker[st:]))
         tmp = self.trial_correct_history[st:]
         # self.correct_avg.append(np.sum(tmp[tmp == 0]) / len(tmp) * 100)
         self.correct_avg.append(collections.Counter(tmp)[0] / (len(tmp) + np.finfo(float).eps) * 100)
@@ -504,7 +545,7 @@ class DMSModel(QObject):
     
     @staticmethod
     def sum_normalize(x):
-        return x / np.sum(x)
+        return x / (np.sum(x) + EPS)
 
     def run_go_cue(self):
         self.output = self.go_cue
@@ -636,6 +677,7 @@ class DMSModel(QObject):
                 choice, result, side = self.determine_choice()
                 if choice != 3:  # effective lick
                     times[t_idx] = time.perf_counter()
+            self.trial_correct_history.append(choice)
 
             t_idx += 1
             perfect = np.maximum(result[0] - early, 0)
@@ -681,7 +723,7 @@ class DMSModel(QObject):
             times[t_idx] = 'NaN'
             t_idx += 1  # 'noise_onset'
             times[t_idx] = time.perf_counter()  # trial_end
-            human = [self.give_water] + self.hi_bounds.tolist() + self.low_bounds.tolist() + self.water_times
+            human = [self.give_water] + self.hi_bounds.tolist() + self.low_bounds.tolist() + self.water_times.tolist()
             events += [perfect] + result + [early] + lick + times + human
 
             self.endTrialSignal.emit()
