@@ -1,7 +1,6 @@
-import nidaqmx as ni
-from nidaqmx.constants import LineGrouping
-import nidaqmx.system, nidaqmx.stream_readers, nidaqmx.stream_writers
-import thorlabs_apt as apt
+# import nidaqmx as ni
+# from nidaqmx.constants import LineGrouping
+# import thorlabs_apt as apt
 import time
 
 class Options:
@@ -22,7 +21,8 @@ class Devices:
                                               line_grouping=LineGrouping.CHAN_PER_LINE)
         self.writer_0 = ni.stream_writers.DigitalMultiChannelWriter(self.out_task_0.out_stream)
         self.out_task_0.start()
-        self.out_tasks = [self.out_task_0]
+        # self.out_tasks = [self.out_task_0]
+        self.out_tasks = {'main': self.out_task_0}
 
         if opts.n_daq == 2:  # if using a box without 2-Daq setup
             self.out_task_1 = ni.Task()
@@ -30,7 +30,8 @@ class Devices:
                                                 line_grouping=LineGrouping.CHAN_PER_LINE)
             self.writer_1 = ni.stream_writers.DigitalMultiChannelWriter(self.out_task_1.out_stream)
             self.out_task_1.start()
-            self.out_tasks.append(self.out_task_1)
+            # self.out_tasks.append(self.out_task_1)
+            self.out_tasks['cd'] = self.out_task_1
 
         self.in_task = ni.Task()
         self.in_task.di_channels.add_di_chan('Dev1/port0/line0:1',
@@ -44,9 +45,10 @@ class Devices:
                                                     line_grouping=LineGrouping.CHAN_PER_LINE)
         self.dev_writer_0 = ni.stream_writers.DigitalMultiChannelWriter(self.dev_out_task_0.out_stream)
         self.dev_out_task_0.start()
+        self.out_tasks['dev'] = self.dev_out_task_0
 
         # MOTOR
-        # if not self.testing:
+        # if not opts.testing:
         devices = apt.list_available_devices()
         motor_0 = apt.Motor(devices[0][1])  # lr motor
         self.motors = [motor_0]
@@ -56,35 +58,20 @@ class Devices:
             # print(devices)
             motor_1 = apt.Motor(devices[1][1])  # forward motor
             param = motor_1.get_velocity_parameters()
-            # motor_1.set_velocity_parameters(param[0], 1e3, 200)
+            motor_1.set_velocity_parameters(param[0], 1e3, 200)
             self.motors.append(motor_1)
 
     def move_forward(self):
-        try:
-            self.motors[1].move_by(-self.forward_motor_step)
-        except:
-            message = "Out-of-range position entered to forward motor. The motor must be moved backwards."
-            print(message)
+        self.motors[1].move_by(-self.forward_motor_step)
 
     def move_backward(self):
-        try:
-            self.motors[1].move_by(self.forward_motor_step)
-        except:
-            message = "Out-of-range position entered to forward motor. The motor must be moved forward."
-            print(message)
-        
+        self.motors[1].move_by(self.forward_motor_step)
 
     def move_lr(self, side):
-        try:
-            if side == 0:  # left
-                # self.motors[0].move_by(-self.sideways_motor_step)
-                self.motors[0].move_to(self.motors[0].position-self.sideways_motor_step)
-            else:
-                self.motors[0].move_by(self.sideways_motor_step)
-        except:
-            message = "Out-of-range position entered to sideways motor. Return the motor to the center."
-            print(message)
-        
+        if side == 0:  # left
+            self.motors[0].move_by(-self.sideways_motor_step)
+        else:
+            self.motors[0].move_by(self.sideways_motor_step)
 
     def motor_test(self, ix):
         # self.motors[ix].move_velocity(2)
@@ -109,6 +96,4 @@ class Devices:
 if __name__ == '__main__':
     opts = Options()
     devices = Devices(opts)
-    # devices.motor_test(1)
-    # devices.move_lr(0)
-    devices.move_forward()
+    devices.motor_test(1)
