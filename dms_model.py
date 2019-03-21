@@ -105,7 +105,7 @@ class DMSModel(QObject):
         self.water_times = np.array([.06, .06, .05, .05])
         self.give_water = False
         # DAQ output arrays
-        self.all_low = [([False] * 8, 'main'), ([False] * 2, 'cd'), ([False], 'dev')]
+        self.all_low = [[False] * 8, [False] * 2, [False]]
         go_cue = list(self.all_low[0])
         light = list(self.all_low[0])
         siren = list(self.all_low[0])
@@ -162,6 +162,7 @@ class DMSModel(QObject):
         self.water_daq = [lw, rw]
         self.dev_low = [False]
         self.error_noise = ([True], 'dev')
+        self.all_low = [([False] * 8, 'main'), ([False] * 2, 'cd'), ([False], 'dev')]
 
         # self.output = list(self.all_low)
         self.output = {'main': list(self.all_low[0]), 'cd': list(self.all_low[1]), 'dev': list(self.dev_low)}
@@ -266,7 +267,7 @@ class DMSModel(QObject):
             # early lick check during delay, stage 3
             if self.early_lick_check and self.cur_stage == 3:
                 if np.sum(self.indicator) > 0 and t < self.early_check_time:
-                    early, siren = 1, True
+                    early, siren = 1, False
                     t_siren = time.perf_counter()
                     self.write_relative(self.siren)
 
@@ -308,6 +309,7 @@ class DMSModel(QObject):
         early = 0
         self.write_relative(self.blank)
         odor = self.trial_dict_list[int(self.opts.cd_ab)][self.trial_type][cue]
+        print(odor)
         self.write_relative(odor)
         early, siren, t_siren = 0, False, 0
         while t < self.timing[2 + cue * 2]:
@@ -321,7 +323,7 @@ class DMSModel(QObject):
 
             if self.early_lick_check:
                 if np.sum(self.indicator) > 0 and t < self.early_check_time:
-                    early, siren = 1, True
+                    early, siren = 1, False
                     self.write_relative(self.siren)
 
             if siren:
@@ -578,7 +580,7 @@ class DMSModel(QObject):
             t = time.perf_counter() - st
             self.update_indicator()
 
-        self.write_dev_port(self.all_low[2])
+        self.write_absolute(self.all_low[2])
 
     # def run_siren(self):
     #     output = [x or y for x, y in zip(self.output[0], self.siren)]
@@ -595,8 +597,9 @@ class DMSModel(QObject):
     def write_relative(self, output):
         # write an output without affecting other processes
         L, daq = output
-        self.output[daq] = [x or y for x, y in zip(self.output[daq], output)]
+        self.output[daq] = [x or y for x, y in zip(self.output[daq], L)]
         if not self.opts.testing:
+            print(self.output[daq])
             self.out_tasks[daq].write(self.output[daq])
 
     # def write_dev_port(self, output):

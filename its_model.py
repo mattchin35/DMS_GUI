@@ -272,7 +272,7 @@ class ITSModel(DMSModel):
             print('amax', np.amax(self.lick_side_counter))
             if np.amax(self.lick_side_counter) >= 2 and self.lr_moving_ports:
                 side = np.argmax(self.lick_side_counter)  # side licked
-                self.devices.move_lr(1-side)  # move to the opposite side
+                self.devices.move_lr(side)  # move to the opposite side
                 self.lick_side_counter *= 0
 
             self.endTrialSignal.emit()
