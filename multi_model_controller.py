@@ -199,7 +199,7 @@ class Controller(QObject):
         self.trainingUi.errorTOLineEdit.setText("{}".format(self.models[self.cur_model].timeout[1]))
         self.trainingUi.earlyLickTOLineEdit.returnPressed.connect(lambda: self.changeEarlyTO())
         self.trainingUi.earlyLickTOLineEdit.setText("{}".format(self.models[self.cur_model].early_timeout))
-        self.trainingUi.earlyLickCheckTimeLineEdit.setText("{}".format(self.models[self.cur_model].early_lick_time))
+        self.trainingUi.earlyLickCheckTimeLineEdit.setText("{}".format(self.models[self.cur_model].early_check_time))
 
         self.trainingUi.minLicksLineEdit.returnPressed.connect(self.minLicksChanges)
 
@@ -268,7 +268,7 @@ class Controller(QObject):
             t = float(self.trainingUi.earlyLickCheckTimeLineEdit.text())
             t = np.minimum(np.sum(self.models[self.cur_model].timing[2:5]), t)
             t = np.maximum(t, 0.)
-            self.models[self.cur_model].early_lick_time = t
+            self.models[self.cur_model].early_check_time = t
             self.trainingUi.earlyLickCheckTimeLineEdit.setText("{:.3f}".format(t))
         except:
             self.invalidInputMsg()
@@ -458,7 +458,7 @@ class Controller(QObject):
 
         self.models[self.cur_model].early_lick_check = self.trainingUi.earlyLickCheckToggle.isChecked()
         self.models[self.cur_model].save_path = self.trainingUi.curPathLineEdit.text()
-        self.trainingUi.earlyLickCheckTimeLineEdit.setText("{:.3f}".format(self.models[self.cur_model].early_lick_time))
+        self.trainingUi.earlyLickCheckTimeLineEdit.setText("{:.3f}".format(self.models[self.cur_model].early_check_time))
         self.curAnimalChanges()
         # self.refreshSaveFiles()
 

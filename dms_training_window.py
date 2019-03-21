@@ -788,6 +788,14 @@ class Ui_trainingWindow:
         self.earlyLickPerformanceLabel.setFont(font)
         self.earlyLickPerformanceLabel.setObjectName("earlyLickPerformanceLabel")
 
+        self.earlyLickCheckTimeLabel = QtWidgets.QLabel("Check Time")
+        self.earlyLickCheckTimeLabel.setObjectName("earlyLickCheckTimeLabel")
+        self.earlyLickCheckTimeLabel.setFont(font)
+
+        self.sirenTimeLabel = QtWidgets.QLabel("Siren Time")
+        self.sirenTimeLabel.setObjectName("sirenTimeLabel")
+        self.sirenTimeLabel.setFont(font)
+
         # BUTTONS #
         self.earlyLickCheckToggle = QtWidgets.QPushButton("Check Early \nLicks")
         self.earlyLickCheckToggle.setObjectName("earlyLickCheckToggle")
@@ -798,13 +806,53 @@ class Ui_trainingWindow:
         # self.earlyLickCheckToggle.setMinimumHeight(ps*5)
         # self.earlyLickCheckToggle.setMinimumSize(ps*len("Check Early")*.7, ps*4)
 
+        self.earlyLickDelayToggle = QtWidgets.QPushButton("Toggle Delay")
+        self.earlyLickDelayToggle.setObjectName("earlyLickDelayToggle")
+        self.earlyLickDelayToggle.setCheckable(True)
+        self.earlyLickDelayToggle.setFont(font)
+        ps = font.pointSize()
+        self.earlyLickDelayToggle.setMaximumWidth(ps * 10)
+
+        self.sirenToggle = QtWidgets.QPushButton("Toggle Siren")
+        self.sirenToggle.setObjectName("sirenToggle")
+        self.sirenToggle.setCheckable(True)
+        self.sirenToggle.setFont(font)
+        ps = font.pointSize()
+        self.sirenToggle.setMaximumWidth(ps * 10)
+
+        # LINE EDITS #
+        self.earlyLickDelayLineEdit = QtWidgets.QLineEdit()
+        self.earlyLickDelayLineEdit.setObjectName("earlyLickDelayLineEdit")
+
+        self.earlyLickCheckTimeLineEdit = QtWidgets.QLineEdit()
+        self.earlyLickCheckTimeLineEdit.setObjectName("earlyLickCheckTimeLineEdit")
+
+        self.sirenTimeLineEdit = QtWidgets.QLineEdit()
+        self.sirenTimeLineEdit.setObjectName("sirenTimeLineEdit")
+
         # GRAPHICS #
         self.earlyLickPerformanceGraphic = pg.PlotWidget()
         self.earlyLickPerformanceGraphic.setObjectName("earlyLickPerformanceGraphic")
 
+        checkTimeVBar = QtWidgets.QVBoxLayout()
+        checkTimeVBar.addWidget(self.earlyLickCheckTimeLabel)
+        checkTimeVBar.addWidget(self.earlyLickCheckTimeLineEdit)
+
+        sirenVBar = QtWidgets.QVBoxLayout()
+        sirenVBar.addWidget(self.sirenTimeLabel)
+        sirenVBar.addWidget(self.sirenTimeLineEdit)
+
+        earlyHBar = QtWidgets.QHBoxLayout()
+        earlyHBar.addWidget(self.earlyLickCheckToggle)
+        earlyHBar.addLayout(checkTimeVBar)
+        earlyHBar.addWidget(self.sirenToggle)
+        earlyHBar.addLayout(sirenVBar)
+        # earlyHBar.setSpacing(0)
+
         earlyLickPlotVBar = QtWidgets.QVBoxLayout()
         earlyLickPlotVBar.addWidget(self.earlyLickLabel)
-        earlyLickPlotVBar.addWidget(self.earlyLickCheckToggle)
+        earlyLickPlotVBar.addLayout(earlyHBar)
+        # earlyLickPlotVBar.addWidget(self.earlyLickCheckToggle)
         earlyLickPlotVBar.addWidget(self.earlyLickPerformanceLabel)
         earlyLickPlotVBar.addWidget(self.earlyLickPerformanceGraphic)
         return earlyLickPlotVBar
@@ -949,9 +997,9 @@ class Ui_trainingWindow:
         self.earlyLickTOLabel.setObjectName("earlyLickTOLabel")
         self.earlyLickTOLabel.setFont(font)
 
-        self.earlyLickCheckTimeLabel = QtWidgets.QLabel("Early Lick\nCheck Time")
-        self.earlyLickCheckTimeLabel.setObjectName("earlyLickCheckTimeLabel")
-        self.earlyLickCheckTimeLabel.setFont(font)
+        # self.earlyLickCheckTimeLabel = QtWidgets.QLabel("Early Lick\nCheck Time")
+        # self.earlyLickCheckTimeLabel.setObjectName("earlyLickCheckTimeLabel")
+        # self.earlyLickCheckTimeLabel.setFont(font)
 
         self.ITSDelayIncrementLabel = QtWidgets.QLabel("ITS Delay\nIncrement")
         self.ITSDelayIncrementLabel.setObjectName("ITSDelayIncrementLabel")
@@ -993,8 +1041,8 @@ class Ui_trainingWindow:
         self.earlyLickTOLineEdit = QtWidgets.QLineEdit()
         self.earlyLickTOLineEdit.setObjectName("earlyLickTOLineEdit")
 
-        self.earlyLickCheckTimeLineEdit = QtWidgets.QLineEdit()
-        self.earlyLickCheckTimeLineEdit.setObjectName("earlyLickCheckTimeLineEdit")
+        # self.earlyLickCheckTimeLineEdit = QtWidgets.QLineEdit()
+        # self.earlyLickCheckTimeLineEdit.setObjectName("earlyLickCheckTimeLineEdit")
 
         self.ITSDelayDecrementLineEdit = QtWidgets.QLineEdit()
         self.ITSDelayDecrementLineEdit.setObjectName("ITSDelayDecrementLineEdit")
@@ -1048,10 +1096,10 @@ class Ui_trainingWindow:
         trialTimelineGrid.addWidget(self.ITSDelayDecrementLineEdit, 4, 2)
         trialTimelineGrid.addWidget(self.consumptionTimeLineEdit, 4, 5)
         trialTimelineGrid.addWidget(self.earlyLickTOLabel, 5, 0)
-        trialTimelineGrid.addWidget(self.earlyLickCheckTimeLabel, 5, 1)
+        # trialTimelineGrid.addWidget(self.earlyLickCheckTimeLabel, 5, 1)
         trialTimelineGrid.addWidget(self.ITSDelayIncrementLabel, 5, 2)
         trialTimelineGrid.addWidget(self.earlyLickTOLineEdit, 6, 0)
-        trialTimelineGrid.addWidget(self.earlyLickCheckTimeLineEdit, 6, 1)
+        # trialTimelineGrid.addWidget(self.earlyLickCheckTimeLineEdit, 6, 1)
         trialTimelineGrid.addWidget(self.ITSDelayIncrementLineEdit, 6, 2)
         # trialTimelineGrid.setSpacing(20)
         # trialTimelineGrid.setRowStretch(0,0)

@@ -95,26 +95,31 @@ class DMSModel(QObject):
             self.timeout = np.array([0.0, 5., 5., 0.])  # timeout for correct, error, switch, miss
 
         self.early_lick_check = False
-        self.early_lick_time = 0.0
+        self.early_check_time = 0.0
         self.early_tracker = []
         self.early_avg = []
+        self.siren_time = .15
 
         # water output
         self.trials_to_water = 5
         self.water_times = np.array([.06, .06, .05, .05])
         self.give_water = False
         # DAQ output arrays
-        self.all_low = [[False] * 8, [False] * 2]
-        self.go_cue = list(self.all_low[0])
-        self.light = list(self.all_low[0])
-        self.siren = list(self.all_low[0])
+        self.all_low = [([False] * 8, 'main'), ([False] * 2, 'cd'), ([False], 'dev')]
+        go_cue = list(self.all_low[0])
+        light = list(self.all_low[0])
+        siren = list(self.all_low[0])
+        blank = list(self.all_low[0])
 
-        self.go_cue[2] = True
-        self.light[3] = True
-        self.siren[4] = True
+        go_cue[2] = True
+        light[3] = True
+        siren[4] = True
+        blank[7] = True
 
-        self.blank = list(self.all_low[0])
-        self.blank[7] = True
+        self.go_cue = (go_cue, 'main')
+        self.light = (light, 'main')
+        self.siren = (siren, 'main')
+        self.blank = (blank, 'main')
 
         odor_a = list(self.all_low[0])  # list() can be used to make a copy
         odor_a[5] = True
@@ -130,6 +135,11 @@ class DMSModel(QObject):
         odor_d = list(self.all_low[1])
         odor_d[1] = True
 
+        odor_a = (odor_a, 'main')
+        odor_b = (odor_b, 'main')
+        odor_c = (odor_c, 'cd')
+        odor_d = (odor_d, 'cd')
+
         cdab_trials = {0: [odor_c, odor_a],
                        1: [odor_c, odor_b],
                        2: [odor_d, odor_b],
@@ -143,19 +153,21 @@ class DMSModel(QObject):
         self.trial_dict_list = [abab_trials, cdab_trials]
 
         lw = list(self.all_low[0])
-        lw[0] = True
         rw = list(self.all_low[0])
+        lw[0] = True
         rw[1] = True
+        lw = (lw, 'main')
+        rw = (rw, 'main')
 
         self.water_daq = [lw, rw]
-        self.output = list(self.all_low)
+        self.dev_low = [False]
+        self.error_noise = ([True], 'dev')
+
+        # self.output = list(self.all_low)
+        self.output = {'main': list(self.all_low[0]), 'cd': list(self.all_low[1]), 'dev': list(self.dev_low)}
         time.perf_counter()
 
         self.lickSideCounter = [0] * 2
-
-        self.dev_low = [[False]]
-        self.error_noise = list(self.dev_low[0])
-        self.error_noise[0] = True
 
         self.motors = devices.motors
         self.out_tasks = devices.out_tasks
@@ -237,9 +249,9 @@ class DMSModel(QObject):
         st = time.perf_counter()
         t = 0
         if self.cur_stage == 0:
-            self.output = self.light
-            self.write(0)
+            self.write_absolute(self.light)
 
+        early, siren, t_siren = 0, False, 0
         while t < delay:
             time.sleep(.001)
             t = time.perf_counter() - st
@@ -251,9 +263,20 @@ class DMSModel(QObject):
             if self.cur_stage < 5:
                 self.intervalTime.emit(t)
 
-        if self.cur_stage == 0:
-            self.output = self.all_low[0]
-            self.write(0)
+            # early lick check during delay, stage 3
+            if self.early_lick_check and self.cur_stage == 3:
+                if np.sum(self.indicator) > 0 and t < self.early_check_time:
+                    early, siren = 1, True
+                    t_siren = time.perf_counter()
+                    self.write_relative(self.siren)
+
+            if siren:
+                if time.perf_counter() - t_siren > self.siren_time:
+                    self.end_write(self.siren)
+
+        # if self.cur_stage == 0:
+        self.write_absolute(self.all_low[0])
+        return early
 
     def run_no_lick(self):
         """Delay the trial until the mouse stops licking for a desired time."""
@@ -283,14 +306,10 @@ class DMSModel(QObject):
         st = time.perf_counter()
         t = 0
         early = 0
-        self.output = self.blank
-        self.write(0)
-        self.output = list(self.trial_dict_list[int(self.opts.cd_ab)][self.trial_type][cue])
-        if self.opts.cd_ab:
-            self.write(1 - cue)
-        else:
-            self.write(0)
-
+        self.write_relative(self.blank)
+        odor = self.trial_dict_list[int(self.opts.cd_ab)][self.trial_type][cue]
+        self.write_relative(odor)
+        early, siren, t_siren = 0, False, 0
         while t < self.timing[2 + cue * 2]:
             # cue is 0 (first odor) or 1 (second odor); odor stages are 2 or 4
             time.sleep(.001)
@@ -300,29 +319,22 @@ class DMSModel(QObject):
             self.intervalTime.emit(t)
             self.update_indicator()
 
-            if cue == 1 and self.early_lick_check:  # second odor
-                if np.sum(self.indicator) > 0 and t < self.early_lick_time:
-                    early = 1
+            if self.early_lick_check:
+                if np.sum(self.indicator) > 0 and t < self.early_check_time:
+                    early, siren = 1, True
+                    self.write_relative(self.siren)
+
+            if siren:
+                if time.perf_counter() - t_siren > self.siren_time:
+                    self.end_write(self.siren)
 
         if self.opts.testing:
             pass
             # early = np.random.randint(2)
 
-        self.output = self.all_low[0]
-        self.write(0)
-        self.output = self.all_low[1]
-        self.write(1)
+        self.write_absolute(self.all_low[0])
+        self.write_absolute(self.all_low[1])
         return early
-
-    def write(self, daq):  # a cleaner function to call
-        # self.writer.write_one_sample_multi_line(self.output)
-        # determine which daq to use
-        if not self.opts.testing:
-            self.out_tasks[daq].write(self.output)
-
-    def write_dev_port(self):
-        if not self.opts.testing:
-            self.dev_out_task_0.write(self.output)
 
     def determine_choice(self):
         """
@@ -397,14 +409,13 @@ class DMSModel(QObject):
         st = time.perf_counter()
         early *= self.early_lick_check  # no water penalty if lick check is off
         water_time = self.water_times[self.correct_choice + early * 2]
-        self.output = list(self.water_daq[self.correct_choice])
-        self.write(0)
+        water = self.water_daq[self.correct_choice]
+        self.write_absolute(water)
         while (time.perf_counter() - st) < water_time:
             self.update_indicator()
 
         print('water delivered')
-        self.output = self.all_low[0]
-        self.write(0)
+        self.write_absolute(self.all_low[0])
 
     def shut_down(self):
         for task in self.out_tasks:
@@ -447,50 +458,50 @@ class DMSModel(QObject):
 
     def update_probabilities(self):
         if self.trial_num > 30:
-            tr_type = np.array(self.trial_type_history)
-            tr_corr = np.array(self.trial_correct_history) == 0
-            aa = tr_type == 0
-            ab = tr_type == 1
-            bb = tr_type == 2
-            ba = tr_type == 3
+            # tr_type = np.array(self.trial_type_history)
+            # tr_corr = np.array(self.trial_correct_history) == 0
+            # aa = tr_type == 0
+            # ab = tr_type == 1
+            # bb = tr_type == 2
+            # ba = tr_type == 3
+            #
+            # # st = max(0, self.trial_num-30)
+            # # aa_corr = tr_corr * aa
+            # # ab_corr = tr_corr * ab
+            # # bb_corr = tr_corr * bb
+            # # ba_corr = tr_corr * ba
+            #
+            # aa_corr = tr_corr[aa]
+            # if len(aa_corr) > 0:
+            #     aa_st = max(len(aa_corr)-30, 0)
+            #     aa_p = np.mean(aa_corr[aa_st:])
+            # else:
+            #     aa_p = 0
+            #
+            # ab_corr = tr_corr[ab]
+            # if len(ab_corr) > 0:
+            #     ab_st = max(len(ab_corr)-30, 0)
+            #     ab_p = np.mean(ab_corr[ab_st:])
+            # else:
+            #     ab_p = 0
+            #
+            # bb_corr = tr_corr[bb]
+            # if len(bb_corr) > 0:
+            #     bb_st = max(len(bb_corr)-30, 0)
+            #     bb_p = np.mean(bb_corr[bb_st:])
+            # else:
+            #     bb_p = 0
+            #
+            # ba_corr = tr_corr[ba]
+            # if len(ba_corr) > 0:
+            #     ba_st = max(len(ba_corr)-30, 0)
+            #     ba_p = np.mean(ba_corr[ba_st:])
+            # else:
+            #     ba_p = 0
 
-            # st = max(0, self.trial_num-30)
-            # aa_corr = tr_corr * aa
-            # ab_corr = tr_corr * ab
-            # bb_corr = tr_corr * bb
-            # ba_corr = tr_corr * ba
-
-            aa_corr = tr_corr[aa]
-            if len(aa_corr) > 0:
-                aa_st = max(len(aa_corr)-30, 0)
-                aa_p = np.mean(aa_corr[aa_st:])
-            else: 
-                aa_p = 0
-
-            ab_corr = tr_corr[ab]
-            if len(ab_corr) > 0:
-                ab_st = max(len(ab_corr)-30, 0)
-                ab_p = np.mean(ab_corr[ab_st:])
-            else:
-                ab_p = 0
-
-            bb_corr = tr_corr[bb]
-            if len(bb_corr) > 0:
-                bb_st = max(len(bb_corr)-30, 0)
-                bb_p = np.mean(bb_corr[bb_st:])
-            else:
-                bb_p = 0
-
-            ba_corr = tr_corr[ba]
-            if len(ba_corr) > 0:
-                ba_st = max(len(ba_corr)-30, 0)
-                ba_p = np.mean(ba_corr[ba_st:])
-            else:
-                ba_p = 0
-
-            perc_corr = np.array([aa_p, ab_p, bb_p, ba_p])
+            # perc_corr = np.array([aa_p, ab_p, bb_p, ba_p])
             # perc_corr[np.isnan(perc_corr)] = 0
-            # perc_corr = self.performance_stimulus[:, 2] / (self.performance_stimulus[:, 0] + np.finfo(float).eps)
+            perc_corr = self.performance_stimulus[:, 2] / (self.performance_stimulus[:, 0] + np.finfo(float).eps)
             self.probabilities = self.sum_normalize(1-perc_corr)
         # avg_perc_correct = np.mean(perc_corr)
         # diff = perc_corr - avg_perc_correct
@@ -542,36 +553,65 @@ class DMSModel(QObject):
         x = np.exp(x - np.amax(x))  # normalization to max of 0
         return x / np.sum(x)
 
-    
     @staticmethod
     def sum_normalize(x):
         return x / (np.sum(x) + EPS)
 
     def run_go_cue(self):
-        self.output = self.go_cue
         st = time.perf_counter()
         t = 0
-        self.write(0)
+        self.write_absolute(self.go_cue)
         while t < .15:
             time.sleep(.001)
             t = time.perf_counter() - st
             self.update_indicator()
 
-        self.output = self.all_low[0]
-        self.write(0)
+        self.write_absolute(self.all_low[0])
 
     def run_error_noise(self):
-        self.output = self.error_noise
         st = time.perf_counter()
         t = 0
-        self.write_dev_port()
+        self.write_absolute(self.error_noise)
+        # self.write_dev_port(self.error_noise)
         while t < .5:
             time.sleep(.001)
             t = time.perf_counter() - st
             self.update_indicator()
 
-        self.output = self.dev_low[0]
-        self.write_dev_port()
+        self.write_dev_port(self.all_low[2])
+
+    # def run_siren(self):
+    #     output = [x or y for x, y in zip(self.output[0], self.siren)]
+    #     self.output[0] = output
+    #     self.write(output)
+
+    def write_absolute(self, output):
+        # output overwriting all present outputs
+        L, daq = output
+        self.output[daq] = list(L)
+        if not self.opts.testing:
+            self.out_tasks[daq].write(self.output[daq])
+
+    def write_relative(self, output):
+        # write an output without affecting other processes
+        L, daq = output
+        self.output[daq] = [x or y for x, y in zip(self.output[daq], output)]
+        if not self.opts.testing:
+            self.out_tasks[daq].write(self.output[daq])
+
+    # def write_dev_port(self, output):
+    #     if not self.opts.testing:
+    #         # self.dev_out_task_0.write(self.output[daq])
+    #         self.dev_out_task_0.write(output)
+
+    def end_write(self, output):
+        # end the output of a specific signal without interrupting other processes.
+        L, daq = output
+        not_output = [not x for x in L]
+        end_signal = [x and y for x, y in zip(self.output[daq], not_output)]
+        self.output[daq] = end_signal
+        if not self.opts.testing:
+            self.out_tasks[daq].write(self.output[daq])
 
     @pyqtSlot()
     def run_program(self):
@@ -602,8 +642,6 @@ class DMSModel(QObject):
                                          'L_reward', 'R_reward', 'noise_onset', 'trial_end', 'AA_hi', 'AB_hi', 'BB_hi', 'BA_hi',
                                          'AA_lo', 'AB_lo', 'BB_lo', 'BA_lo', 'left_w ater_time', 'right_water_time', 'early_left_water',
                                          'early_right_water'])
-
-                        self.water_times
 
                     with open(self.licking_file, 'w', newline='') as f:
                         writer = csv.writer(f)
@@ -641,14 +679,14 @@ class DMSModel(QObject):
             self.cur_stage += 1  # 2
             times[t_idx:t_idx + 2] = [time.perf_counter()] * 2
             t_idx += 2  # stimulus and odor 1 start
-            self.run_odor(0)
+            early = self.run_odor(0)
 
             # print('delay')
             self.cur_stage += 1  # 3
             times[t_idx] = time.perf_counter()  # delay start
             t_idx += 1
             # self.run_interval(self.delay)
-            self.run_interval(self.timing[self.cur_stage])
+            early = self.run_interval(self.timing[self.cur_stage])
 
             # print('odor2')
             self.cur_stage += 1  # 4
@@ -677,6 +715,7 @@ class DMSModel(QObject):
                 choice, result, side = self.determine_choice()
                 if choice != 3:  # effective lick
                     times[t_idx] = time.perf_counter()
+
             self.trial_correct_history.append(choice)
 
             t_idx += 1
@@ -772,8 +811,6 @@ class DMSModel(QObject):
         # self.trial_type = 3
         # self.run_odor(0)
         # self.run_odor(1)
-
-
 
 
 if __name__ == '__main__':
