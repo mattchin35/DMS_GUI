@@ -790,11 +790,31 @@ class Ui_trainingWindow:
 
         self.earlyLickCheckTimeLabel = QtWidgets.QLabel("Check Time")
         self.earlyLickCheckTimeLabel.setObjectName("earlyLickCheckTimeLabel")
-        self.earlyLickCheckTimeLabel.setFont(font)
+        # self.earlyLickCheckTimeLabel.setFont(font)
 
         self.sirenTimeLabel = QtWidgets.QLabel("Siren Time")
         self.sirenTimeLabel.setObjectName("sirenTimeLabel")
-        self.sirenTimeLabel.setFont(font)
+        # self.sirenTimeLabel.setFont(font)
+
+        self.earlyPauseLabel = QtWidgets.QLabel("Pause Time")
+        self.earlyPauseLabel.setObjectName("earlyPauseLabel")
+        # self.earlyPauseLabel.setFont(font)
+
+        self.earlyCheckTimeIncLabel = QtWidgets.QLabel("+ Delta")
+        self.earlyCheckTimeIncLabel.setObjectName("earlyCheckTimeIncLabel")
+        # self.earlyCheckTimeInc.setFont(font)
+
+        self.earlyCheckTimeDecLabel = QtWidgets.QLabel("- Delta")
+        self.earlyCheckTimeDecLabel.setObjectName("earlyCheckTimeDecLabel")
+        # self.earlyCheckTimeDec.setFont(font)
+
+        self.earlyCheckTimeUBLabel = QtWidgets.QLabel("Upper Bound")
+        self.earlyCheckTimeUBLabel.setObjectName("earlyCheckTimeUBLabel")
+        # self.sirenTimeLabel.setFont(font)
+
+        self.earlyCheckTimeLBLabel = QtWidgets.QLabel("Lower Bound")
+        self.earlyCheckTimeLBLabel.setObjectName("earlyCheckTimeLBLabel")
+        # self.sirenTimeLabel.setFont(font)
 
         # BUTTONS #
         self.earlyLickCheckToggle = QtWidgets.QPushButton("Check Early \nLicks")
@@ -830,6 +850,21 @@ class Ui_trainingWindow:
         self.sirenTimeLineEdit = QtWidgets.QLineEdit()
         self.sirenTimeLineEdit.setObjectName("sirenTimeLineEdit")
 
+        self.earlyPauseLineEdit = QtWidgets.QLineEdit()
+        self.earlyPauseLineEdit.setObjectName("earlyPauseLineEdit")
+
+        self.earlyCheckTimeIncLineEdit = QtWidgets.QLineEdit()
+        self.earlyCheckTimeIncLineEdit.setObjectName("earlyCheckTimeIncLineEdit")
+
+        self.earlyCheckTimeDecLineEdit = QtWidgets.QLineEdit()
+        self.earlyCheckTimeDecLineEdit.setObjectName("earlyCheckTimeDecLineEdit")
+
+        self.earlyCheckTimeUBLineEdit = QtWidgets.QLineEdit()
+        self.earlyCheckTimeUBLineEdit.setObjectName("earlyCheckTimeUBLineEdit")
+
+        self.earlyCheckTimeLBLineEdit = QtWidgets.QLineEdit()
+        self.earlyCheckTimeLBLineEdit.setObjectName("earlyCheckTimeLBLineEdit")
+
         # GRAPHICS #
         self.earlyLickPerformanceGraphic = pg.PlotWidget()
         self.earlyLickPerformanceGraphic.setObjectName("earlyLickPerformanceGraphic")
@@ -849,9 +884,22 @@ class Ui_trainingWindow:
         earlyHBar.addLayout(sirenVBar)
         # earlyHBar.setSpacing(0)
 
+        earlyControlsGrid = QtWidgets.QGridLayout()
+        earlyControlsGrid.addWidget(self.earlyPauseLabel,0,0)
+        earlyControlsGrid.addWidget(self.earlyCheckTimeIncLabel,0,1)
+        earlyControlsGrid.addWidget(self.earlyCheckTimeDecLabel,0,2)
+        earlyControlsGrid.addWidget(self.earlyCheckTimeUBLabel,0,3)
+        earlyControlsGrid.addWidget(self.earlyCheckTimeLBLabel,0,4)
+        earlyControlsGrid.addWidget(self.earlyPauseLineEdit,1,0)
+        earlyControlsGrid.addWidget(self.earlyCheckTimeIncLineEdit,1,1)
+        earlyControlsGrid.addWidget(self.earlyCheckTimeDecLineEdit,1,2)
+        earlyControlsGrid.addWidget(self.earlyCheckTimeUBLineEdit,1,3)
+        earlyControlsGrid.addWidget(self.earlyCheckTimeLBLineEdit,1,4)
+
         earlyLickPlotVBar = QtWidgets.QVBoxLayout()
         earlyLickPlotVBar.addWidget(self.earlyLickLabel)
         earlyLickPlotVBar.addLayout(earlyHBar)
+        earlyLickPlotVBar.addLayout(earlyControlsGrid)
         # earlyLickPlotVBar.addWidget(self.earlyLickCheckToggle)
         earlyLickPlotVBar.addWidget(self.earlyLickPerformanceLabel)
         earlyLickPlotVBar.addWidget(self.earlyLickPerformanceGraphic)
@@ -922,28 +970,65 @@ class Ui_trainingWindow:
 
         self.earlyLickPerformanceLabel = QtWidgets.QLabel("Early Lick Performance")
         self.earlyLickPerformanceLabel.setFont(boldfont)
-        self.earlyLickPerformanceLabel.setObjectName("trialTypePerformanceLabel")
+        self.earlyLickPerformanceLabel.setObjectName("earlyLickPerformanceLabel")
 
         # TABLES #
-        self.overallPerformanceTableWidget = QtWidgets.QTableWidget(self.performanceGroup)
-        self.overallPerformanceTableWidget.setObjectName("overallPerformanceTableWidget")
+        self.overallPerformanceTable = QtWidgets.QTableWidget()
+        self.overallPerformanceTable.setObjectName("overallPerformanceTable")
 
-        self.trialTypePerformanceTableWidget = QtWidgets.QTableWidget(self.performanceGroup)
-        self.trialTypePerformanceTableWidget.setObjectName("trialTypePerformanceTableWidget")
+        self.trialTypePerformanceTable = QtWidgets.QTableWidget()
+        self.trialTypePerformanceTable.setObjectName("trialTypePerformanceTable")
+
+        self.earlyLickPerformanceTable = QtWidgets.QTableWidget()
+        self.trialTypePerformanceTable.setObjectName("trialTypePerformanceTable")
+
+        # initiate tables
+        self.overallPerformanceTable.setRowCount(9)
+        self.overallPerformanceTable.setColumnCount(2)
+
+        self.trialTypePerformanceTable.setRowCount(4)
+        self.trialTypePerformanceTable.setColumnCount(7)
+
+        self.earlyLickPerformanceTable.setRowCount(5)
+        self.earlyLickPerformanceTable.setColumnCount(2)
+
+        # set labels
+        self.overallPerformanceTable.setHorizontalHeaderLabels(['trials', 'rate   '])
+        self.overallPerformanceTable.setVerticalHeaderLabels(['correct', 'error', 'switch', 'miss', 'early_lick',
+                                                    'left', 'right', 'l_reward', 'r_reward'])
+        self.overallPerformanceTable.horizontalHeaderItem(0).setTextAlignment(QtCore.Qt.AlignHCenter)
+        self.overallPerformanceTable.horizontalHeaderItem(1).setTextAlignment(QtCore.Qt.AlignHCenter)
+        self.overallPerformanceTable.resizeColumnsToContents()
+        self.overallPerformanceTable.resizeRowsToContents()
+
+        self.trialTypePerformanceTable.setVerticalHeaderLabels(['AA', 'AB', 'BB', 'BA'])
+        self.trialTypePerformanceTable.setHorizontalHeaderLabels(['trials', '% perfect', 'correct', 'error', 'switch',
+                                                        'miss', 'early'])
+        self.trialTypePerformanceTable.resizeColumnsToContents()
+        self.trialTypePerformanceTable.resizeRowsToContents()
+
+        self.earlyLickPerformanceTable.setVerticalHeaderLabels(['AA', 'AB', 'BB', 'BA', 'Overall'])
+        self.earlyLickPerformanceTable.setHorizontalHeaderLabels(['Check Time\nChange', 'Current Check\nTime'])
+        self.earlyLickPerformanceTable.resizeColumnsToContents()
+        self.earlyLickPerformanceTable.resizeRowsToContents()
 
         # LAYOUTS #
         perfVBar = QtWidgets.QVBoxLayout()
         overallPerfVBar = QtWidgets.QVBoxLayout()
         overallPerfVBar.addWidget(self.overallPerformanceLabel)
-        overallPerfVBar.addWidget(self.overallPerformanceTableWidget)
+        overallPerfVBar.addWidget(self.overallPerformanceTable)
+
+        earlyPerfVBar = QtWidgets.QVBoxLayout()
+        earlyPerfVBar.addWidget(self.earlyLickPerformanceLabel)
+        earlyPerfVBar.addWidget(self.earlyLickPerformanceTable)
 
         perfHBar = QtWidgets.QHBoxLayout()
         perfHBar.addLayout(overallPerfVBar)
-        # perfHBar.addLayout(earlyLickPlotVBar)
+        perfHBar.addLayout(earlyPerfVBar)
 
-        perfVBar.addLayout(perfHBar)
+        perfVBar.addLayout(perfHBar,2)
         perfVBar.addWidget(self.trialTypePerformanceLabel)
-        perfVBar.addWidget(self.trialTypePerformanceTableWidget)
+        perfVBar.addWidget(self.trialTypePerformanceTable,1)
 
         self.performanceGroup.setLayout(perfVBar)
 
@@ -1309,14 +1394,16 @@ class Ui_trainingWindow:
             self.bbProbabilityLabel.setText("DB")
             self.baProbabilityLabel.setText("DA")
             self.trialTypeComboBox.setItemText(1, "CA/CB")
-            # self.stimulusLabel.setText(_translate("MainWindow", "CA               CB                DB               DA"))
+            self.trialTypePerformanceTable.setVerticalHeaderLabels(['CA', 'CB', 'DB', 'DA'])
+            self.earlyLickPerformanceTable.setVerticalHeaderLabels(['CA', 'CB', 'DB', 'DA', 'Overall'])
         else:
             self.aaProbabilityLabel.setText("AA")
             self.abProbabilityLabel.setText("AB")
             self.bbProbabilityLabel.setText("BB")
             self.baProbabilityLabel.setText("BA")
             self.trialTypeComboBox.setItemText(1, "AA/AB")
-            # self.stimulusLabel.setText(_translate("MainWindow", "AA               AB                BB               BA"))
+            self.trialTypePerformanceTable.setVerticalHeaderLabels(['AA', 'AB', 'BB', 'BA'])
+            self.earlyLickPerformanceTable.setVerticalHeaderLabels(['AA', 'AB', 'BB', 'BA', 'Overall'])
 
 
 if __name__ == "__main__":

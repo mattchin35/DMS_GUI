@@ -12,6 +12,11 @@ import thorlabs_apt as apt
 from utilities import Devices, Options
 
 skipStartUi = 1
+DAQ = 0
+
+# TO-DO: READABILITY UPGRADES
+# organize models with dictionaries, taking model indices out (for more controls and stuff in the future)
+# use references within fxns to avoid self.X so much
 
 
 class Controller(QObject):
@@ -31,9 +36,10 @@ class Controller(QObject):
         # if self.forward_moving_ports:
         #     self.devices.motors[1].move_to(self.devices.motors[1].position + 10)
 
-        self.thread  = QThread()
-        dmsModel.moveToThread(self.thread)
-        itsModel.moveToThread(self.thread)
+        self.modelThread = QThread()
+        self.lickThread = QThread()
+        dmsModel.moveToThread(self.modelThread)
+        itsModel.moveToThread(self.modelThread)
         self.models = [dmsModel, itsModel]
         self.cur_model = 0 
 
@@ -54,6 +60,14 @@ class Controller(QObject):
             self.startUi.goButton.clicked.connect(self.showTrainingUi)
 
     #   TRAINING UI
+    def _buildWindow(self):
+        # Collect all the bits that refer to the GUI window
+        pass
+
+    def _connectWindow(self):
+        # create all signal connections
+        pass
+
     def showTrainingUi(self):
         """
         TRAINING UI
@@ -61,6 +75,8 @@ class Controller(QObject):
         self.uiType = 'trainingUi'
         self.correct_avg = []
         self.bias = []
+        ui = self.trainingUi
+        model = self.models[self.cur_model]
 
         #   AUTOFILLS
         self.trainingUi.curAnimalLineEdit.setText(self.models[self.cur_model].mouse)
@@ -108,7 +124,10 @@ class Controller(QObject):
         self.trainingUi.stopButton.clicked.connect(self.stopProgram)
         # self.trainingUi.changeAnimalButton.clicked.connect(self.changeMouse)  # use lineEdit.returnPressed
         self.trainingUi.giveWaterToggle.clicked[bool].connect(self.giveWaterToggle)
+
         self.trainingUi.earlyLickCheckToggle.clicked[bool].connect(self.earlyLickToggle)
+        self.trainingUi.sirenToggle.clicked[bool].connect(self.sirenToggle)
+
         self.stimBoundButtons = [self.trainingUi.upper3Button, self.trainingUi.upper1Button,
                                  self.trainingUi.lower3Button, self.trainingUi.lower1Button]
         self.stimBoundButtons[0].clicked.connect(lambda: self.setAllStimBounds(0))
@@ -192,8 +211,18 @@ class Controller(QObject):
         self.motorBoxes[2].returnPressed.connect(lambda: self.motorEditChanges(2))
         self.motorBoxes[3].returnPressed.connect(lambda: self.motorEditChanges(3))
 
-        self.trainingUi.earlyLickCheckTimeLineEdit.returnPressed.connect(self.changeEarlyCheckTime)
         self.trainingUi.trialsToWaterLineEdit.returnPressed.connect(self.changeTrialsToWater)
+
+        self.earlyBoxes = [ui.earlyLickCheckTimeLineEdit, ui.sirenTimeLineEdit, ui.earlyPauseLineEdit,
+                           ui.earlyCheckTimeIncLineEdit, ui.earlyCheckTimeDecLineEdit,
+                           ui.earlyCheckTimeUBLineEdit, ui.earlyCheckTimeLBLineEdit]
+        self.earlyBoxes[0].returnPressed.connect(lambda: self.earlyEditChanges('check_time'))
+        self.earlyBoxes[1].returnPressed.connect(lambda: self.earlyEditChanges('siren_time'))
+        self.earlyBoxes[2].returnPressed.connect(lambda: self.earlyEditChanges('pause_time'))
+        self.earlyBoxes[3].returnPressed.connect(lambda: self.earlyEditChanges('increment'))
+        self.earlyBoxes[4].returnPressed.connect(lambda: self.earlyEditChanges('decrement'))
+        self.earlyBoxes[5].returnPressed.connect(lambda: self.earlyEditChanges('upper_bound'))
+        self.earlyBoxes[6].returnPressed.connect(lambda: self.earlyEditChanges('lower_bound'))
 
         self.trainingUi.errorTOLineEdit.returnPressed.connect(lambda: self.changeErrorTO())
         self.trainingUi.errorTOLineEdit.setText("{}".format(self.models[self.cur_model].timeout[1]))
@@ -229,9 +258,11 @@ class Controller(QObject):
         self.pg_trialByTrial.setMouseEnabled(x=True, y=False)
         self.pg_correctP.setMouseEnabled(x=True, y=False)
         self.pg_bias.setMouseEnabled(x=True, y=False)
+        self.pg_early.setMouseEnabled(x=True, y=False)
 
         self.pg_trialByTrial.setYRange(0, 3, padding=None)
         self.pg_correctP.setYRange(0, 100, padding=None)
+        self.pg_early.setYRange(0, 100, padding=None)
 
         self.trainingUi.leftLickIndicatorWidget.setStyleSheet(
             "QWidget { background-color: %s}" % self.led_off.name())
@@ -248,20 +279,50 @@ class Controller(QObject):
         try:
             self.models[self.cur_model].water_times[ix] = float(self.waterBoxes[ix].text())
             print(self.models[self.cur_model].water_times[ix])
-        except:
-            self.invalidInputMsg()
+        except Exception as ex:
+            self.invalidInputMsg(ex)
 
     def itsDelayEditChanges(self, ix):
         try:
             self.models[1].delay_adjust[ix] = float(self.itsDelayBoxes[ix].text())
-        except:
-            self.invalidInputMsg()
+        except Exception as ex:
+            self.invalidInputMsg(ex)
 
     def earlyLickToggle(self, pressed):
+        model = self.models[self.cur_model]
         if pressed:
-            self.models[self.cur_model].early_lick_check = True
+            model.early_lick_check = True
         else:
-            self.models[self.cur_model].early_lick_check = False
+            model.early_lick_check = False
+
+    def sirenToggle(self, pressed):
+        model = self.models[self.cur_model]
+        if pressed:
+            model.use_siren = True
+        else:
+            model.use_siren = False
+
+    def earlyEditChanges(self, setting):
+        model = self.models[self.cur_model]
+        boxes = self.earlyBoxes
+        try:
+            if setting == 'check_time':
+                model.early_check_time = float(boxes[0].text())
+            elif setting == 'siren_time':
+                model.siren_time = float(boxes[1].text())
+            elif setting == 'pause_time':
+                model.early_pause = float(boxes[2].text())
+            elif setting == 'increment':
+                model.early_delta[0] = float(boxes[3].text())
+            elif setting == 'decrement':
+                model.early_delta[1] = float(boxes[4].text())
+            elif setting == 'upper_bound':
+                model.early_check_bounds[0] = float(boxes[5].text())
+            else:  # setting == 'lower_bound':
+                model.early_check_bounds[1] = float(boxes[6].text())
+
+        except Exception as ex:
+            self.invalidInputMsg(ex)
 
     def changeEarlyCheckTime(self):
         try:
@@ -270,8 +331,8 @@ class Controller(QObject):
             t = np.maximum(t, 0.)
             self.models[self.cur_model].early_check_time = t
             self.trainingUi.earlyLickCheckTimeLineEdit.setText("{:.3f}".format(t))
-        except:
-            self.invalidInputMsg()
+        except Exception as ex:
+            self.invalidInputMsg(ex)
 
     def setAllStimBounds(self, ix):
         if ix < 2:
@@ -408,8 +469,8 @@ class Controller(QObject):
     def changeTrialsToWater(self):
         try:
             self.models[self.cur_model].trials_to_water = float(self.trainingUi.trialsToWaterLineEdit.text())
-        except:
-            self.invalidInputMsg()
+        except Exception as ex:
+            self.invalidInputMsg(ex)
 
     def changeOdorType(self):
         odors = self.trainingUi.odorTypeComboBox.currentText()
@@ -491,8 +552,8 @@ class Controller(QObject):
                     self.timeLineEditBoxes[idx].setText('{:.3f}'.format(self.models[self.cur_model].timing[idx]))
                     return
             self.models[self.cur_model].timing[idx] = float(self.timeLineEditBoxes[idx].text())
-        except:
-            self.invalidInputMsg()
+        except Exception as ex:
+            self.invalidInputMsg(ex)
 
     def motorEditChanges(self, idx):
         try:
@@ -509,38 +570,38 @@ class Controller(QObject):
                 self.devices.forward_motor_step = float(self.motorBoxes[3].text())
 
             self.models[self.cur_model].timing[idx] = float(self.timeLineEditBoxes[idx].text())
-        except:
-            self.invalidInputMsg()
+        except Exception as ex:
+            self.invalidInputMsg(ex)
 
     def ubEditChanges(self, idx):
         try:
             self.models[self.cur_model].hi_bounds[idx] = int(self.ubLineEdit[idx].text())
-        except:
-            self.invalidInputMsg()
+        except Exception as ex:
+            self.invalidInputMsg(ex)
 
     def lbEditChanges(self, idx):
         try:
             self.models[self.cur_model].low_bounds[idx] = int(self.lbLineEdit[idx].text())
-        except:
-            self.invalidInputMsg()
+        except Exception as ex:
+            self.invalidInputMsg(ex)
 
     def minLicksChanges(self):
         try:
             self.models[self.cur_model].min_licks = int(self.trainingUi.minLicksLineEdit.text())
-        except:
-            self.invalidInputMsg()
+        except Exception as ex:
+            self.invalidInputMsg(ex)
 
     def changeErrorTO(self):
         try:
             self.models[self.cur_model].timeout[1:3] = int(self.trainingUi.errorTOLineEdit.text())
-        except:
-            self.invalidInputMsg()
+        except Exception as ex:
+            self.invalidInputMsg(ex)
 
     def changeEarlyTO(self):
         try:
             self.models[self.cur_model].early_timeout = int(self.trainingUi.earlyLickTOLineEdit.text())
-        except:
-            self.invalidInputMsg()
+        except Exception as ex:
+            self.invalidInputMsg(ex)
 
     def probEditChanges(self, idx):
         try:
@@ -553,53 +614,27 @@ class Controller(QObject):
                 self.customProbability[3].setText("{:.2f}".format(tmp[3]))
             else:
                 self.invalidInputMsg()
-        except:
-            self.invalidInputMsg()
+        except Exception as ex:
+            self.invalidInputMsg(ex)
 
     def endTrialInputs(self):
         self.plot()
         self.changeDataTables()
-        if self.cur_model == 1:  # ITS.3
+        if self.cur_model == 1:  # ITS
 
             ix = self.models[self.cur_model].delay_ix
             self.trainingUi.earlyLickCheckTimeLineEdit.setText("{:.3f}".format(self.models[self.cur_model].timing[ix]))
 
         self.trainingUi.giveWaterToggle.setChecked(False)
-
         print('trial has ended')
 
-    def setDataTables(self):
-        # define
-        self.overall_table = self.trainingUi.overallPerformanceTableWidget
-        self.trialType_table = self.trainingUi.trialTypePerformanceTableWidget
-
-        # initiate table
-        self.overall_table.setRowCount(self.models[self.cur_model].performance_overall.shape[0])
-        self.overall_table.setColumnCount(self.models[self.cur_model].performance_overall.shape[1])
-        self.overall_table.resize(140, 235)
-
-        self.trialType_table.setRowCount(self.models[self.cur_model].performance_stimulus.shape[0])
-        self.trialType_table.setColumnCount(self.models[self.cur_model].performance_stimulus.shape[1])
-        self.trialType_table.resize(350, 125)
-
-        # set labels
-        self.overall_table.setHorizontalHeaderLabels(['trials', 'rate   '])
-        self.overall_table.setVerticalHeaderLabels(['correct', 'error', 'switch', 'miss', 'early_lick',
-                                                    'left', 'right', 'l_reward', 'r_reward'])
-        self.overall_table.horizontalHeaderItem(0).setTextAlignment(Qt.AlignHCenter)
-        self.overall_table.horizontalHeaderItem(1).setTextAlignment(Qt.AlignHCenter)
-        self.overall_table.resizeColumnsToContents()
-        self.overall_table.resizeRowsToContents()
-
-        self.trialType_table.setVerticalHeaderLabels(['AA', 'AB', 'BB', 'BA'])
-        self.trialType_table.setHorizontalHeaderLabels(['trials ', '% perfect', 'correct', 'error  ', 'switch ',
-                                                        'miss', 'early'])
-        self.trialType_table.resizeColumnsToContents()
-        self.trialType_table.resizeRowsToContents()
-
     def changeDataTables(self):
-        overall_data = self.models[self.cur_model].performance_overall
-        trialType_data = self.models[self.cur_model].performance_stimulus
+        model = self.models[self.cur_model]
+        perftable = self.trainingUi.earlyLickPerformanceTable
+
+        overall_data = model.performance_overall
+        trialType_data = model.performance_stimulus
+        early_data = model.early_performance
 
         for i in range(overall_data.shape[0]):
             self.overall_table.setItem(i, 0, QTableWidgetItem(str(int(overall_data[i][0]))))  # trials
@@ -612,6 +647,10 @@ class Controller(QObject):
                 else:
                     self.trialType_table.setItem(i, j, QTableWidgetItem("{:.2f}".format(trialType_data[i][j])))
 
+        for i in range(early_data.shape[0]):
+            perftable.setItem(i, 0, QTableWidgetItem(f"{int(early_data[i][0])}"))
+            perftable.setItem(i, 1, QTableWidgetItem(f"{int(early_data[i][1])}"))
+
     def plot(self):
         current_trial = self.models[self.cur_model].trial_num
         brushes = ['g', 'r', 'y', 'w']
@@ -620,6 +659,7 @@ class Controller(QObject):
         lastplot_ix = self.models[self.cur_model].last_trial_plotted
         print('lastplot', lastplot_ix)
         trials = self.models[self.cur_model].trial_array[lastplot_ix + 1:]
+        # trials = self.models[self.cur_model].trial_array
         print('num trials to plot:', len(trials))
         # Trial-by-Trial Graphic
         # self.pg_trialByTrial.plot([current_trial], [trial_type], pen=None, symbolBrush=symbolBrush, symbolPen=symbolPen)
@@ -655,7 +695,7 @@ class Controller(QObject):
             self.pg_bias.setXRange(current_trial - 100, current_trial, padding=None)
 
         # Early Lick
-        self.pg_early.plot(self.models[self.cur_model].early_avg, pen='r', symbol=None, clear=True)
+        self.pg_early.plot(self.models[self.cur_model].early_avg * 100, pen='r', symbol=None, clear=True)
         if current_trial < 101:
             self.pg_early.setXRange(0, 100, padding=None)
         else:
@@ -697,11 +737,15 @@ class Controller(QObject):
         self.pg_trialByTrial.plot(clear=True)
         self.pg_correctP.plot(clear=True)
         self.pg_bias.plot(clear=True)
+
+        self.pg_trialByTrial.setXRange(0, 30, padding=None)
+        self.pg_bias.setXRange(0, 100, padding=None)
+        self.pg_early.setXRange(0, 100, padding=None)
         self.changeDataTables()
 
-    def invalidInputMsg(self):
+    def invalidInputMsg(self, ex):
         msg = QErrorMessage()
-        msg.showMessage("Invalid input")
+        msg.showMessage(f"Exception {type(ex).__name__}: Invalid input")
         msg.exec()
 
 
@@ -730,3 +774,4 @@ if __name__ == '__main__':
         sys.exit(app.exec_())
     except:
         print("Exiting")
+

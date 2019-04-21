@@ -1,15 +1,17 @@
-import time
 import numpy as np
 import nidaqmx as ni
 from nidaqmx.constants import LineGrouping
-from PyQt5.QtCore import pyqtSignal, pyqtSlot, QObject
-import sys, os, csv, collections
+from PyQt5.QtCore import *
+import os, csv, collections
 import thorlabs_apt as apt
 from utilities import Devices, Options
+# from lickSensorModel import lickSensorModel
 
 # np.random.seed(2)
+# Global variables for tuple indexing
 EPS = np.finfo(float).eps
-
+ARRAY = 0
+DAQ = 1
 
 class DMSModel(QObject):
     """
@@ -26,13 +28,15 @@ class DMSModel(QObject):
     intReady = pyqtSignal(int)
     intervalTime = pyqtSignal(float)
 
-    def __init__(self, opts, devices):
+    def __init__(self, opts, devices, sensor_model):
         super().__init__()
         self.num_trial_types = 4
         self.opts = opts
         self.testing = opts.testing
         # self.cd_ab = opts.cd_ab
         self.moving_ports = opts.forward_moving_ports
+        self.sensors = sensor_model
+        # self.indicator = sensor_model.indicator
 
         # performance
         self.trial_num = 0
@@ -40,7 +44,6 @@ class DMSModel(QObject):
         self.trial_correct_history = []
         self.trial_array = []  # make a single list of (trial number, choice, early)
         self.indicator = np.array([[False], [False]])
-        self.prev_indicator = np.array([[False], [False]])
         self.performance_overall = np.zeros((9, 2))  # was 8 2
         # correct, error, switch, miss, early_lick, left, right, l reward, r reward
         # left column numbers, right column
@@ -75,7 +78,7 @@ class DMSModel(QObject):
         self.save_path = ''  # save location
         self.mouse = ''  # Mouse name
         self.events_file = ''
-        self.licking_file = ''
+
         self.run = False
         self.refresh = False
 
@@ -84,109 +87,154 @@ class DMSModel(QObject):
         self.cur_stage = 0
         self.elapsed_time = np.zeros(4)  # odor1, delay, odor2, response
         # iti, no lick, odor1, delay, odor2, response, consumption
+
+        # Helper dictionaries for readability/
+        self.choice_dict = {'correct': 0, 'error': 1, 'switch': 2, 'miss': 3}
+        self.stage_dict = {'iti': 0, 'no lick': 1, 'sample': 2, 'delay': 3,
+                           'test': 4, 'response': 5, 'consumption': 6}
+        self.logger_ix = {'ITI_start': 0, 'trial_start': 1, 'stimulus_start': 2, '1st_odor_onset': 3, 'delay_onset': 4,
+                      '2nd_odor_onset': 5, '2nd_delay_onset': 6, 'go_tone': 7, 'effective_lick': 8,
+                      'L_reward': 9, 'R_reward': 10, 'noise_onset': 11, 'trial_end': 12}
+
+        outcome_header = ['trial_no.', 'trial_type', 'perfect', 'correct', 'error', 'switch',
+                          'miss', 'early_lick', 'left', 'right', 'L_reward', 'R_reward']
+        time_header = list(self.logger_ix.keys())
+        human_header = ['give_water', 'AA_hi', 'AB_hi', 'BB_hi', 'BA_hi',
+                        'AA_lo', 'AB_lo', 'BB_lo', 'BA_lo',
+                        'left_water_time', 'right_water_time', 'early_left_water', 'early_right_water']
+        self.header = outcome_header + time_header + human_header
+
         if self.opts.testing:
             # self.timing = [.1] * 7  # for testing
-            self.timing = [1, .4, .5, 1.5, .5, 3, 1]  # standard times
-            self.early_timeout = 1.0
-            self.timeout = np.array([0.0, 1., 1., 0.])  # timeout for correct, error, switch, miss
+            self.timing = np.array([1000, 400, 500, 1500, 500, 300, 1000])  # standard times
+            self.early_timeout = 1e3
+            self.timeout = np.array([0, 1000, 1000, 0])  # timeout for correct, error, switch, miss
         else:
-            self.timing = [3, .4, .5, 1.5, .5, 3, 1]  # standard times
-            self.early_timeout = 6.0
-            self.timeout = np.array([0.0, 5., 5., 0.])  # timeout for correct, error, switch, miss
+            self.timing = np.array([3000, 400, 500, 1500, 500, 300, 1000])  # standard times
+            self.early_timeout = 6e3
+            self.timeout = np.array([0, 500, 500, 0])  # timeout for correct, error, switch, miss
 
         self.early_lick_check = False
-        self.early_check_time = 0.0
+        self.early_check_time = 0
         self.early_tracker = []
         self.early_avg = []
-        self.siren_time = .15
+        self.siren_time = 150
+        self.use_siren = False
+        self.siren_on = False
+        self.early_pause = 0
+        self.early_delta = np.array([50, 100])
+        self.early_check_bounds = np.array([2500, 0])
+        self.early_time_tracker = []
+        self.early_performance = np.zeros((5,2))
 
         # water output
         self.trials_to_water = 5
-        self.water_times = np.array([.06, .06, .05, .05])
+        self.water_times = np.array([60, 60, 50, 50])
         self.give_water = False
         # DAQ output arrays
-        self.all_low = [[False] * 8, [False] * 2, [False]]
-        go_cue = list(self.all_low[0])
-        light = list(self.all_low[0])
-        siren = list(self.all_low[0])
-        blank = list(self.all_low[0])
+        all_low = ([False] * 8, [False] * 2, [False])
+        go_cue = list(all_low[0])
+        light = list(all_low[0])
+        siren = list(all_low[0])
+        blank = list(all_low[0])
 
         go_cue[2] = True
         light[3] = True
         siren[4] = True
         blank[7] = True
 
-        self.go_cue = (go_cue, 'main')
-        self.light = (light, 'main')
-        self.siren = (siren, 'main')
-        self.blank = (blank, 'main')
+        self.go_cue = dict(array=go_cue, daq='main')
+        self.light = dict(array=light, daq='main')
+        self.siren = dict(array=siren, daq='main')
+        self.blank = dict(array=blank, daq='main')
 
-        odor_a = list(self.all_low[0])  # list() can be used to make a copy
+        odor_a = list(all_low[0])  # list() can be used to make a copy
         odor_a[5] = True
         odor_a[7] = True
+        self.odor_a = odor_a
 
-        odor_b = list(self.all_low[0])
+        odor_b = list(all_low[0])
         odor_b[6] = True
         odor_b[7] = True
+        self.odor_b = odor_b
 
-        odor_c = list(self.all_low[1])
+        odor_c = list(all_low[1])
         odor_c[0] = True
+        self.odor_c = odor_c
 
-        odor_d = list(self.all_low[1])
+        odor_d = list(all_low[1])
         odor_d[1] = True
+        self.odor_d = odor_d
 
-        odor_a = (odor_a, 'main')
-        odor_b = (odor_b, 'main')
-        odor_c = (odor_c, 'cd')
-        odor_d = (odor_d, 'cd')
+        odor_a = dict(array=odor_a, daq='main')
+        odor_b = dict(array=odor_b, daq='main')
+        odor_c = dict(array=odor_c, daq='cd')
+        odor_d = dict(array=odor_d, daq='cd')
 
-        cdab_trials = {0: [odor_c, odor_a],
-                       1: [odor_c, odor_b],
-                       2: [odor_d, odor_b],
-                       3: [odor_d, odor_a]}
+        cdab_trials = {0: (odor_c, odor_a),
+                       1: (odor_c, odor_b),
+                       2: (odor_d, odor_b),
+                       3: (odor_d, odor_a)}
 
-        abab_trials = {0: [odor_a, odor_a],
-                       1: [odor_a, odor_b],
-                       2: [odor_b, odor_b],
-                       3: [odor_b, odor_a]}
+        abab_trials = {0: (odor_a, odor_a),
+                       1: (odor_a, odor_b),
+                       2: (odor_b, odor_b),
+                       3: (odor_b, odor_a)}
 
-        self.trial_dict_list = [abab_trials, cdab_trials]
+        self.trial_dict_list = (abab_trials, cdab_trials)
+        # self.trial_dict = dict(abab=abab_trials, cdab=cdab_trials)
 
-        lw = list(self.all_low[0])
-        rw = list(self.all_low[0])
+        lw = list(all_low[0])
+        rw = list(all_low[0])
         lw[0] = True
         rw[1] = True
-        lw = (lw, 'main')
-        rw = (rw, 'main')
+        lw = dict(array=lw, daq='main')
+        rw = dict(array=rw, daq='main')
 
-        self.water_daq = [lw, rw]
-        self.dev_low = [False]
-        self.error_noise = ([True], 'dev')
-        self.all_low = [([False] * 8, 'main'), ([False] * 2, 'cd'), ([False], 'dev')]
+        self.water_daq = (lw, rw)
+        self.error_noise = dict(array=[True], daq='dev')
+        # self.all_low = [dict(array=[False] * 8, daq='main'), dict(array=[False] * 2, daq='cd'),
+        #                 dict(array=[False], daq='dev')]
+        self.all_low = {'main': dict(array=all_low[0], daq='main'),
+                        'cd': dict(array=all_low[1], daq='cd'),
+                        'dev': dict(array=all_low[2], daq='dev')}
 
         # self.output = list(self.all_low)
-        self.output = {'main': list(self.all_low[0]), 'cd': list(self.all_low[1]), 'dev': list(self.dev_low)}
-        time.perf_counter()
-
+        self.output = {'main': [False] * 8, 'cd': [False] * 2, 'dev': [False]}
         self.lickSideCounter = [0] * 2
 
         self.motors = devices.motors
         self.out_tasks = devices.out_tasks
         self.in_task = devices.in_task
-        self.dev_out_task_0 = devices.dev_out_task_0
+        # self.dev_out_task_0 = devices.dev_out_task_0
         self.reader = devices.reader
         self.devices = devices
+        self.sensor_model = sensor_model
         self.last_trial_plotted = -1
 
+        self.indicatorTimer = QTimer()
+        self.indicatorTimer.setTimerType(Qt.PreciseTimer)
+        self.indicatorTimer.callOnTimeout(self.update_indicator)
+        self.indicatorTimer.setInterval(10)  # update indicator every 10 milliseconds
+
+        self.time = QTime()
+        self.time.start()
+
+    @pyqtSlot()
     def update_indicator(self):
-        self.prev_indicator = self.indicator.copy()
+        """Detect the presence of a new lick."""
+        prev_indicator = self.indicator.copy()
         if not self.opts.testing:
             self.reader.read_one_sample_multi_line(self.indicator)
 
-        if not np.array_equal(self.indicator, self.prev_indicator):
+        if not np.array_equal(self.indicator, prev_indicator):
+            new_lick = (self.indicator - prev_indicator) > 0  # side being newly licked
+            if np.sum(new_lick) > 0:
+                self.licking_export.append([self.time.elapsed(),
+                                            int(new_lick[0]), int(new_lick[1])])
+                self.save()
+
             self.lickSignal.emit()
-            time.sleep(.001)
-            self.licking_export.append([time.perf_counter(), int(self.indicator[0]), int(self.indicator[1])])
 
     def choose_next_trial(self):
         move = False
@@ -245,98 +293,134 @@ class DMSModel(QObject):
         print('old and new trials', self.trial_type, trial_type)
         return trial_type
 
-    def run_interval(self, delay):
-        """A generic delay between stages of the task."""
-        st = time.perf_counter()
-        t = 0
-        if self.cur_stage == 0:
-            self.write_absolute(self.light)
+    def run_iti(self, iti):
+        self.write_absolute(self.light)
+        self.run_interval(iti, odor_period=False)
+        self.write_absolute(self.all_low['main'])
 
-        early, siren, t_siren = 0, False, 0
-        while t < delay:
-            time.sleep(.001)
-            t = time.perf_counter() - st
-            self.update_indicator()
-            if self.cur_stage == 3:
-                # stimulus time is staggered by two indices - only delay uses this function during stimulus
-                self.elapsed_time[self.cur_stage - 2] = t
+    def run_delay(self):
+        ix = self.stage_dict['delay']
+        early, t_early = self.run_interval(self.timing[ix], odor_period=True, elapsed_ix=1)
+        self.write_absolute(self.all_low['main'])
+        return early, t_early
 
-            if self.cur_stage < 5:
-                self.intervalTime.emit(t)
+    def run_interval(self, delay, odor_period, elapsed_ix=-1):
+        """
+        A generic delay between stages of the task.
+        :param delay: integer length of the interval in milliseconds
+        :param odor_period: boolean of whether trial is in sample through test
+        :param elapsed_ix: integer index of elapsed time array
+        """
+        t = QTime()
+        t.start()
+        elapsed = 0
+        if odor_period:
+            early, t_early, t_skip = 0, self.early_check_time, 0
+            self.siren_on, self.t_siren = False, 0
+            intervalTimer = QTimer()
+            intervalTimer.setTimerType(Qt.PreciseTimer)
+            # emit_time = lambda: self.intervalTime.emit(t.elapsed() - t_skip)
+            emit_time = lambda: self.intervalTime.emit(elapsed)
+            intervalTimer.callOnTimeout(emit_time)
+            intervalTimer.start(10)
 
-            # early lick check during delay, stage 3
-            if self.early_lick_check and self.cur_stage == 3:
-                if np.sum(self.indicator) > 0 and t < self.early_check_time:
-                    early, siren = 1, False
-                    t_siren = time.perf_counter()
+        while elapsed < delay:
+            if odor_period:
+                self.elapsed_time[elapsed_ix] = elapsed
+
+                if self.early_lick_check:
+                    loop_early, loop_early, loop_skip = self.early_loop(elapsed)
+                    early = max(early, loop_early)
+                    t_early = min(t_early, loop_early)
+                    t_skip += loop_skip
+
+                if self.siren_on:
+                    if elapsed - self.t_siren > self.siren_time:
+                        self.siren_on = False
+                        self.end_write(self.siren)
+
+            elapsed = t.elapsed() - t_skip
+
+        if odor_period:
+            intervalTimer.stop()
+            return early, t_early
+
+    def early_loop(self, elapsed):
+        """ Check for early licks. For use with sample, delay and test. """
+        early, t_early, t_skip = 0, self.early_check_time, 0
+        stimulus_time = np.sum(self.elapsed_time)
+        if self.early_lick_check:
+            if np.sum(self.indicator) > 0 and stimulus_time < self.early_check_time:
+                early = 1
+                t_early = stimulus_time
+                if self.use_siren:
+                    self.siren_on = True
+                    self.t_siren = elapsed
                     self.write_relative(self.siren)
 
-            if siren:
-                if time.perf_counter() - t_siren > self.siren_time:
-                    self.end_write(self.siren)
+                if self.early_pause > 0:
+                    t_skip = self.run_early_pause()
 
-        # if self.cur_stage == 0:
-        self.write_absolute(self.all_low[0])
-        return early
+        return early, t_early, t_skip
+
+    def run_early_pause(self):
+        t = QTime()
+        t.start()
+        elapsed = t.elapsed()
+        while elapsed < self.early_pause:
+            if self.siren_on and elapsed > self.siren_time:
+                self.siren_on = False
+                self.end_write(self.siren)
+            elapsed = t.elapsed()
+        return t.elapsed()
 
     def run_no_lick(self):
         """Delay the trial until the mouse stops licking for a desired time."""
         no_lick = False
-        st = time.perf_counter()
+        t = QTime()
+        t.start()
+        elapsed = 0
+
+        intervalTimer = QTimer()
+        intervalTimer.setTimerType(Qt.PreciseTimer)
+        emit_time = lambda: self.intervalTime.emit(t.elapsed())
+        intervalTimer.callOnTimeout(emit_time)
+        intervalTimer.start(10)
+
+        ix = self.stage_dict['no_lick']
         while not no_lick:
             """
             1. check for lick
             2. if lick, restart time
             3. if no lick, check time passed
             """
-            time.sleep(.001)
-            self.update_indicator()
+            # QThread.msleep(1)
             if np.sum(self.indicator) > 0:
-                st = time.perf_counter()
-
-            t = time.perf_counter() - st
-            self.intervalTime.emit(t)
-            if t > self.timing[1]:  # no lick time stage 1
+                t.restart()
+            if elapsed > self.timing[ix]:  # no lick time stage 1
                 no_lick = True
+            elapsed = t.elapsed()  # value in milliseconds
+        intervalTimer.stop()
 
-    def run_odor(self, cue):
-        """
-        Release odors.
-        :param cue: 0 or 1, denoting the odor delivery stage.
-        """
-        st = time.perf_counter()
-        t = 0
-        early = 0
+    def run_odor(self):
+        if self.cur_stage == 'sample':
+            elapsed_ix = 0
+            cue = 0
+        else:  # delay
+            elapsed_ix = 2
+            cue = 1
+
         self.write_relative(self.blank)
-        odor = self.trial_dict_list[int(self.opts.cd_ab)][self.trial_type][cue]
-        print(odor)
+        trial_dict = self.trial_dict_list[int(self.opts.cd_ab)]
+        odor = trial_dict[self.trial_type][cue]
+        # print(odor)
         self.write_relative(odor)
-        early, siren, t_siren = 0, False, 0
-        while t < self.timing[2 + cue * 2]:
-            # cue is 0 (first odor) or 1 (second odor); odor stages are 2 or 4
-            time.sleep(.001)
-            t = time.perf_counter() - st
-            # stimulus time is staggered by two indices
-            self.elapsed_time[self.cur_stage - 2] = t
-            self.intervalTime.emit(t)
-            self.update_indicator()
 
-            if self.early_lick_check:
-                if np.sum(self.indicator) > 0 and t < self.early_check_time:
-                    early, siren = 1, False
-                    self.write_relative(self.siren)
-
-            if siren:
-                if time.perf_counter() - t_siren > self.siren_time:
-                    self.end_write(self.siren)
-
-        if self.opts.testing:
-            pass
-            # early = np.random.randint(2)
-
-        self.write_absolute(self.all_low[0])
-        self.write_absolute(self.all_low[1])
-        return early
+        ix = self.stage_dict[self.cur_stage]
+        early, t_early = self.run_interval(self.timing[ix], True, elapsed_ix)
+        self.write_absolute(self.all_low['main'])
+        self.write_absolute(self.all_low['cd'])
+        return early, t_early
 
     def determine_choice(self):
         """
@@ -347,27 +431,31 @@ class DMSModel(QObject):
             For performance updates.
         side: the side chosen by the mouse. -1 for a switch or miss, 0 left, 1 right.
         """
-        st = time.perf_counter()
+        t = QTime()
+        t.start()
+        elapsed = 0
+
+        intervalTimer = QTimer()
+        intervalTimer.setTimerType(Qt.PreciseTimer)
+        emit_time = lambda: self.intervalTime.emit(t.elapsed())
+        intervalTimer.callOnTimeout(emit_time)
+        intervalTimer.start(10)
+
         licks = np.zeros((2, 1))
         active = False
         choice = 3  # miss
-        result = [0] * 4
         side = -1
         # choice = 0 - correct, 1 - error, 2 - switch, 3 - miss
-        t = 0
-        while t <= self.timing[self.cur_stage]:
-            time.sleep(.001)
-            t = time.perf_counter() - st
-            self.elapsed_time[self.cur_stage - 2] = t
-            self.intervalTime.emit(t)
-
-            self.update_indicator()
+        ix = self.stage_dict['response']
+        while elapsed <= self.timing[ix]:
+            self.elapsed_time[3] = elapsed
             sum_ind = np.sum(self.indicator)
-            if np.sum(sum_ind > 1):
-                # error, licked both at the same time
+
+            # error, licked both at the same time
+            if sum_ind > 1:
                 self.performance_overall[1, self.correct_choice] += 1
                 choice = 1
-                break  # continue?
+                break
 
             # check if starting a new lick
             if not active and sum_ind == 1:
@@ -386,11 +474,7 @@ class DMSModel(QObject):
             # check for a choice
             if np.sum(licks) == 2:
                 side = np.argmax(licks)
-                if side == self.correct_choice:
-                    choice = 0  # correct
-                    break
-                else:
-                    choice = 1  # error
+                choice = side == self.correct_choice
                 break
 
             # Testing
@@ -403,21 +487,18 @@ class DMSModel(QObject):
                     side = 1 - self.correct_choice
                     self.give_water = False
                 break
-        result[choice] = 1
-        return choice, result, side
 
-    def deliver_water(self, early):
+        return choice, side
+
+    def deliver_water(self, early, side):
         """Deliver water, assuming the right choice was made."""
-        st = time.perf_counter()
         early *= self.early_lick_check  # no water penalty if lick check is off
-        water_time = self.water_times[self.correct_choice + early * 2]
-        water = self.water_daq[self.correct_choice]
+        water_time = self.water_times[side + early * 2]
+        water = self.water_daq[side]
         self.write_absolute(water)
-        while (time.perf_counter() - st) < water_time:
-            self.update_indicator()
-
+        self.run_interval(water_time, False)
         print('water delivered')
-        self.write_absolute(self.all_low[0])
+        self.write_absolute(self.all_low['main'])
 
     def shut_down(self):
         for task in self.out_tasks:
@@ -445,6 +526,7 @@ class DMSModel(QObject):
         self.correct_avg = []
         self.performance_overall *= 0
         self.performance_stimulus *= 0
+        self.early_performance *= 0
         self.licking_export = []
         self.trial_type = 0  # current trial type
         self.trial_type_progress *= 0  # correct count, total number of trial type seen
@@ -505,16 +587,6 @@ class DMSModel(QObject):
             # perc_corr[np.isnan(perc_corr)] = 0
             perc_corr = self.performance_stimulus[:, 2] / (self.performance_stimulus[:, 0] + np.finfo(float).eps)
             self.probabilities = self.sum_normalize(1-perc_corr)
-        # avg_perc_correct = np.mean(perc_corr)
-        # diff = perc_corr - avg_perc_correct
-        # diff *= 2 / self.num_trial_types
-        # p = np.ones(self.num_trial_types) / self.num_trial_types - diff
-        # if np.sum(np.isnan(p)) > 0:
-        #     # print("fail")
-        #     return
-        # else:
-        #     # self.probabilities = self.softmax(p)
-        #     self.probabilities = self.sum_normalize(p)
             print("Probabilities: ", self.probabilities)
 
     def prepare_plot_data(self, choice, early):
@@ -530,7 +602,7 @@ class DMSModel(QObject):
     def update_performance(self, choice, result, early, lick):
         print(choice, result, early, lick)
         # performance_stimulus
-        # num trials, % perfect, %correct, %error, %switch, %miss, %early
+        # rows: num trials, % perfect, %correct, %error, %switch, %miss, %early
         # get total number of a result, add 1 and divide by new total trial type
         # multiply % of each result by total num
         cnt = self.performance_stimulus[self.trial_type, 1:] * self.performance_stimulus[self.trial_type, 0]
@@ -545,10 +617,19 @@ class DMSModel(QObject):
         self.performance_stimulus[self.trial_type, 1:] = cnt / (self.performance_stimulus[self.trial_type, 0] + EPS)
 
         # performance_overall
-        # correct, error, switch, miss, early_lick, left, right, l reward, r reward
+        # cols: correct, error, switch, miss, early_lick, left, right, l reward, r reward
         # left column numbers, right column percent
         self.performance_overall[:, 0] += np.array(result + [early] + lick)
         self.performance_overall[:, 1] = self.performance_overall[:, 0] / (self.trial_num + EPS)
+
+        # early lick performance
+        early_time = np.array(self.early_time_tracker)
+        tr_type = np.array(self.trial_type_history)
+        tr = tr_type == self.trial_type
+        self.early_performance[1, self.trial_type] = np.mean(early_time[tr])
+        self.early_performance[0, self.trial_type] = self.early_check_time - self.early_performance[1, self.trial_type]
+        # self.early_performance[-1, 1] = np.mean(early_time)
+        self.early_performance[-1] = np.mean(self.early_performance[:4], axis=0)
 
     @staticmethod
     def softmax(x):
@@ -560,56 +641,36 @@ class DMSModel(QObject):
         return x / (np.sum(x) + EPS)
 
     def run_go_cue(self):
-        st = time.perf_counter()
-        t = 0
         self.write_absolute(self.go_cue)
-        while t < .15:
-            time.sleep(.001)
-            t = time.perf_counter() - st
-            self.update_indicator()
-
-        self.write_absolute(self.all_low[0])
+        self.run_interval(150, False)
+        self.write_absolute(self.all_low['main'])
 
     def run_error_noise(self):
-        st = time.perf_counter()
-        t = 0
         self.write_absolute(self.error_noise)
-        # self.write_dev_port(self.error_noise)
-        while t < .5:
-            time.sleep(.001)
-            t = time.perf_counter() - st
-            self.update_indicator()
-
-        self.write_absolute(self.all_low[2])
-
-    # def run_siren(self):
-    #     output = [x or y for x, y in zip(self.output[0], self.siren)]
-    #     self.output[0] = output
-    #     self.write(output)
+        self.run_interval(500, False)
+        self.write_absolute(self.all_low['dev'])
 
     def write_absolute(self, output):
         # output overwriting all present outputs
-        L, daq = output
+        L, daq = output['array'], output['daq']
+        # L, daq = output
         self.output[daq] = list(L)
         if not self.opts.testing:
             self.out_tasks[daq].write(self.output[daq])
 
     def write_relative(self, output):
         # write an output without affecting other processes
-        L, daq = output
+        L, daq = output['array'], output['daq']
+        # L, daq = output
         self.output[daq] = [x or y for x, y in zip(self.output[daq], L)]
         if not self.opts.testing:
-            print(self.output[daq])
+            # print(self.output[daq])
             self.out_tasks[daq].write(self.output[daq])
-
-    # def write_dev_port(self, output):
-    #     if not self.opts.testing:
-    #         # self.dev_out_task_0.write(self.output[daq])
-    #         self.dev_out_task_0.write(output)
 
     def end_write(self, output):
         # end the output of a specific signal without interrupting other processes.
-        L, daq = output
+        L, daq = output['array'], output['daq']
+        # L, daq = output
         not_output = [not x for x in L]
         end_signal = [x and y for x, y in zip(self.output[daq], not_output)]
         self.output[daq] = end_signal
@@ -625,9 +686,13 @@ class DMSModel(QObject):
 
         self.run = True
         self.refresh = False
-        choice = 0
-        early = 0
-        trials_to_water_counter = 0
+        choice, early, trials_to_water_counter = 0, 0, 0
+        logger_ix = self.logger_ix
+        water_delivered = False
+
+        time = self.time
+        time.restart()
+        self.indicatorTimer.start()
         while self.run:
             # File I/O
             if not self.opts.testing:
@@ -638,19 +703,13 @@ class DMSModel(QObject):
                 if not os.path.isfile(self.events_file):
                     with open(self.events_file, 'w', newline='') as f:
                         writer = csv.writer(f)
-                        writer.writerow(['trial_no.', 'trial_type', 'perfect', 'correct', 'error', 'switch',
-                                         'miss', 'early_lick', 'left', 'right', 'L_reward', 'R_reward', 'ITI_start',
-                                         'trial_start', 'stimulus_start', '1st_odor_onset', 'delay_onset',
-                                         '2nd_odor_onset', '2nd_delay_onset', 'Go_tone', 'effective_lick',
-                                         'L_reward', 'R_reward', 'noise_onset', 'trial_end', 'AA_hi', 'AB_hi', 'BB_hi', 'BA_hi',
-                                         'AA_lo', 'AB_lo', 'BB_lo', 'BA_lo', 'left_w ater_time', 'right_water_time', 'early_left_water',
-                                         'early_right_water'])
+                        writer.writerow(self.header)
 
                     with open(self.licking_file, 'w', newline='') as f:
                         writer = csv.writer(f)
                         writer.writerow(['timestamp', 'left', 'right'])
 
-            time.sleep(.001)  # need sleep time for graph
+            QThread.msleep(1)  # need sleep time for graph
             self.elapsed_time *= 0
             self.choose_next_trial()
 
@@ -660,117 +719,129 @@ class DMSModel(QObject):
             self.startTrialSignal.emit()
 
             events = [self.trial_num, self.trial_type]
-            times = ['NaN'] * 13
+            times = ['NaN'] * len(self.logger_ix)
 
-            # trial structure
-            # print('iti')
-            self.cur_stage = 0
-            t_idx = 0
-            times[t_idx] = time.perf_counter()  # iti start
-            t_idx += 1
-            iti = self.timing[self.cur_stage] + self.timeout[choice] + \
+            ## Trial structure ##
+
+            self.cur_stage = 'iti'
+            ix = logger_ix['ITI_start']
+            times[ix] = time.elapsed()
+            ix = self.stage_dict[self.cur_stage]
+            iti = self.timing[ix] + self.timeout[choice] + \
                   self.early_timeout * early * int(self.early_lick_check)
             self.run_interval(iti)
 
-            # print('no lick')
-            self.cur_stage += 1  # 1
-            times[t_idx] = time.perf_counter()  # trial start
-            t_idx += 1
+            self.cur_stage = 'no_lick'
+            ix = logger_ix['trial_start']
+            times[ix] = time.elapsed()
             self.run_no_lick()
 
-            # print('odor1')
-            self.cur_stage += 1  # 2
-            times[t_idx:t_idx + 2] = [time.perf_counter()] * 2
-            t_idx += 2  # stimulus and odor 1 start
-            early = self.run_odor(0)
+            self.cur_stage = 'sample'
+            sample_st = time.elapsed()
+            ix = logger_ix['stimulus_start']
+            times[ix] = sample_st
+            ix = logger_ix['1st_odor_onset']
+            times[ix] = sample_st
+            early_sample, t_early_sample = self.run_odor()
 
-            # print('delay')
-            self.cur_stage += 1  # 3
-            times[t_idx] = time.perf_counter()  # delay start
-            t_idx += 1
-            # self.run_interval(self.delay)
-            early = self.run_interval(self.timing[self.cur_stage])
+            self.cur_stage = 'delay'
+            ix = logger_ix['delay_onset']
+            times[ix] = time.elapsed()
+            early_delay, t_early_delay = self.run_delay()
 
-            # print('odor2')
-            self.cur_stage += 1  # 4
-            times[t_idx] = time.perf_counter()  # odor 2 start
-            t_idx += 1
-            early = self.run_odor(1)
-            t_idx += 1
+            self.cur_stage = 'test'
+            ix = logger_ix['2nd_odor_onset']
+            times[ix] = time.elapsed()
+            early_test, t_early_test = self.run_odor()
 
-            # print('response')
-            # lick detection/response window
-            self.cur_stage += 1  # 5
+            early = np.amax([early_sample, early_delay, early_test])
+            t_early = np.amin([t_early_sample, t_early_delay, t_early_test])
+            self.early_time_tracker.append(t_early)
+
             # move lick ports to mouse
             if self.moving_ports:
                 self.devices.move_forward()
-                # time.sleep(.5)
+                self.run_interval(500, False)
 
-            self.run_go_cue()
-
-            times[t_idx] = time.perf_counter()  # go tone
-            t_idx += 1
-            if self.give_water:
-                choice, result, side = 0, [0] * 4, self.correct_choice
-                result[choice] = 1
-                times[t_idx] = time.perf_counter()
-            else:
-                choice, result, side = self.determine_choice()
-                if choice != 3:  # effective lick
-                    times[t_idx] = time.perf_counter()
-
-            self.trial_correct_history.append(choice)
-
-            t_idx += 1
-            perfect = np.maximum(result[0] - early, 0)
-            lick = [0] * 4  # [left licked, right licked, left correct, right correct]
-            if side != -1:
-                lick[side] = 1
-                self.lickSideCounter[side] += 1
+            # 2nd delay onset is left as Nan
 
             if trials_to_water_counter >= self.trials_to_water:
                 self.give_water = True
 
-            if choice == 0 or self.give_water:
+            ix = logger_ix['go_tone']
+            times[ix] = time.elapsed()
+            self.run_go_cue()
+
+            if self.correct_choice == 0:
+                water_ix = logger_ix['L_reward']
+            else:
+                water_ix = logger_ix['R_reward']
+
+            self.cur_stage = 'response'
+            if self.give_water:
+                times[water_ix] = time.elapsed()
+                self.deliver_water(early, self.correct_choice)
+                water_delivered = True
+
+            ix = logger_ix['effective_lick']
+            choice, side = self.determine_choice()
+            if choice != 3:  # effective lick
+                times[ix] = time.elapsed()
+
+            perfect = int(choice == 0 and early == 0)
+            lick = [0] * 4  # [left licked, right licked, left correct, right correct]
+            if side != -1:
+                lick[side] = 1
+
+            if choice == 0:  # correct
                 self.trial_type_progress[0] += 1
+                trials_to_water_counter = 0
+                if not water_delivered:
+                    times[water_ix] = time.elapsed()
+                    self.deliver_water(early, self.correct_choice)
+                    water_delivered = True
+
                 if side >= 0:  # lick made
                     lick[2 + side] = 1
-                    times[t_idx + side] = time.perf_counter()  # L/R reward
 
-                trials_to_water_counter = 0
-                self.deliver_water(early)
-            elif trials_to_water_counter >= self.trials_to_water:  # give water
-                trials_to_water_counter = 0
-                self.deliver_water(early)
-            elif choice == 1 or choice == 2:
-                # increase trials-to-water counte
+            else:  # error, switch, miss
                 trials_to_water_counter += 1
-                self.run_error_noise()
-            else:  # for miss
-                trials_to_water_counter += 1
+                if choice < 3:
+                    ix = logger_ix['noise_onset']
+                    times[ix] = time.elapsed()
+                    self.run_error_noise()
 
-            t_idx += 2
             # consumption time
-            self.run_interval(self.timing[-1])  # consumption time is last
-            self.update_performance(choice, result, early, lick)
-            self.prepare_plot_data(choice, early)
+            self.run_interval(self.timing[-1], False)  # consumption time is last
 
             # remove ports from mouse
             if self.moving_ports:
                 self.devices.move_backward()
 
+            self.trial_correct_history.append(choice)
+
+            if self.early_lick_check:
+                sign = early * -2 + 1
+                check_time = self.early_check_time + sign * self.early_check_bounds[early]
+                check_time = max(min(check_time, self.early_check_bounds[0]), self.early_check_bounds[1])
+                self.early_check_time = check_time
+
+            result = [0] * 4
+            result[choice] = 1
+            self.update_performance(choice, result, early, lick)
+            self.prepare_plot_data(choice, early)
             if self.random or self.trial_num > 30:
                 self.update_probabilities()
 
-            times[t_idx] = 'NaN'
-            t_idx += 1  # 'noise_onset'
-            times[t_idx] = time.perf_counter()  # trial_end
+            ix = logger_ix['trial_end']
+            times[ix] = time.elapsed()
             human = [self.give_water] + self.hi_bounds.tolist() + self.low_bounds.tolist() + self.water_times.tolist()
             events += [perfect] + result + [early] + lick + times + human
 
             self.endTrialSignal.emit()
             self.trial_num += 1
             self.give_water = False
+            water_delivered = False
             if self.opts.testing:
                 print('by stimulus:\n', self.performance_stimulus)
                 print('overall\n', self.performance_overall)
@@ -786,13 +857,17 @@ class DMSModel(QObject):
                 self.refreshSignal.emit()
                 self.refresh = False
 
+    def stop(self):
+        self.run = False
+        self.indicatorTimer.stop()
+
     def motor_test(self, ix):
         # self.motors[ix].move_velocity(2)
         # self.motors[ix].move_by(10)
         self.motors[ix].move_to(self.motors[ix].position + self.motor_step)
         print('max', self.motors[ix].get_velocity_parameter_limits())  # max accel, max vel
         print('current', self.motors[ix].get_velocity_parameters())  # min vel, current accel, current max vel
-        time.sleep(1)
+        QThread.sleep(1)
         # self.motors[ix].move_velocity(1)
         # self.motors[ix].move_by(10)
         self.motors[ix].move_to(self.motors[ix].position - self.motor_step)
@@ -800,17 +875,17 @@ class DMSModel(QObject):
         print('posn', self.motors[ix].position)
 
     def push_water(self):
-        self.water_times = [.5, .5, .03, .03]
-        self.correct_choice = 0
-        self.deliver_water(0)
-        self.correct_choice = 1
-        self.deliver_water(0)
+        self.water_times = [50, 50, 30, 30]
+        self.deliver_water(0, 0)
+        self.deliver_water(0, 1)
 
     def test_odors(self):
         self.trial_type = 0
-        self.run_odor(0)
-        time.sleep(1)
-        self.run_odor(1)
+        self.cur_stage = 'sample'
+        self.run_odor()
+        QThread.sleep(1)
+        self.cur_stage = 'test'
+        self.run_odor()
         # self.trial_type = 3
         # self.run_odor(0)
         # self.run_odor(1)
