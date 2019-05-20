@@ -165,7 +165,7 @@ class DMSModel(QObject):
         self.all_low = [([False] * 8, 'main'), ([False] * 2, 'cd'), ([False], 'dev')]
 
         # self.output = list(self.all_low)
-        self.output = {'main': list(self.all_low[0]), 'cd': list(self.all_low[1]), 'dev': list(self.dev_low)}
+        self.output = {'main': list(self.all_low[0][0]), 'cd': list(self.all_low[1][0]), 'dev': list(self.all_low[2][0])}
         time.perf_counter()
 
         self.lickSideCounter = [0] * 2
@@ -177,6 +177,9 @@ class DMSModel(QObject):
         self.reader = devices.reader
         self.devices = devices
         self.last_trial_plotted = -1
+
+        self.side_cnt = np.zeros(2, dtype=np.int32)
+        self.max_same_dir = 3
 
     def update_indicator(self):
         self.prev_indicator = self.indicator.copy()
@@ -191,7 +194,9 @@ class DMSModel(QObject):
     def choose_next_trial(self):
         move = False
         if self.random:
-            if self.trial_type_progress[1] >= self.random_hi_bound:
+            switch_side = np.sum(self.side_cnt >= self.max_same_dir)
+            reached_bound = self.trial_type_progress[1] >= self.random_hi_bound
+            if reached_bound or switch_side:
                 move = True
         elif self.trial_type_progress[1] >= self.strict_ub or self.trial_type_progress[0] >= self.hi_bounds[self.trial_type]:
             move = True
@@ -211,8 +216,11 @@ class DMSModel(QObject):
                     self.trial_type = (self.trial_type + 1) % 4
 
             self.trial_type_progress *= 0
-            self.random_hi_bound = np.random.randint(self.low_bounds[self.trial_type],
-                                                     self.hi_bounds[self.trial_type] + 1)
+            if self.random:
+                self.random_hi_bound = np.random.randint(1,3)
+            else:
+                self.random_hi_bound = np.random.randint(self.low_bounds[self.trial_type],
+                                                         self.hi_bounds[self.trial_type] + 1)
 
         if self.automate:
             trange = self.min_trial_to_auto[int(self.random)]
@@ -239,9 +247,13 @@ class DMSModel(QObject):
         else:
             tmp = self.probabilities.copy()
 
-        tmp[self.trial_type] /= 5  # make repeats unlikely
+        if self.side_cnt[0] >= self.max_same_dir:
+            tmp[[0,2]] = 0
+        elif self.side_cnt[1] >= self.max_same_dir:
+            tmp[[1,3]] = 0
+
         tmp /= np.sum(tmp)
-        trial_type = np.random.choice(4, p=tmp)
+        trial_type = np.random.choice(4,p=tmp)
         print('old and new trials', self.trial_type, trial_type)
         return trial_type
 
@@ -269,7 +281,7 @@ class DMSModel(QObject):
                 if np.sum(self.indicator) > 0 and t < self.early_check_time:
                     early, siren = 1, False
                     t_siren = time.perf_counter()
-                    self.write_relative(self.siren)
+                    # self.write_relative(self.siren)
 
             if siren:
                 if time.perf_counter() - t_siren > self.siren_time:
@@ -307,10 +319,10 @@ class DMSModel(QObject):
         st = time.perf_counter()
         t = 0
         early = 0
-        self.write_relative(self.blank)
         odor = self.trial_dict_list[int(self.opts.cd_ab)][self.trial_type][cue]
-        print(odor)
-        self.write_relative(odor)
+        if cue == 0 and self.opts.cd_ab:
+            self.write_relative(self.blank)
+        self.write_absolute(odor)
         early, siren, t_siren = 0, False, 0
         while t < self.timing[2 + cue * 2]:
             # cue is 0 (first odor) or 1 (second odor); odor stages are 2 or 4
@@ -324,7 +336,7 @@ class DMSModel(QObject):
             if self.early_lick_check:
                 if np.sum(self.indicator) > 0 and t < self.early_check_time:
                     early, siren = 1, False
-                    self.write_relative(self.siren)
+                    # self.write_relative(self.siren)
 
             if siren:
                 if time.perf_counter() - t_siren > self.siren_time:
@@ -503,25 +515,17 @@ class DMSModel(QObject):
 
             # perc_corr = np.array([aa_p, ab_p, bb_p, ba_p])
             # perc_corr[np.isnan(perc_corr)] = 0
-            perc_corr = self.performance_stimulus[:, 2] / (self.performance_stimulus[:, 0] + np.finfo(float).eps)
-            self.probabilities = self.sum_normalize(1-perc_corr)
-        # avg_perc_correct = np.mean(perc_corr)
-        # diff = perc_corr - avg_perc_correct
-        # diff *= 2 / self.num_trial_types
-        # p = np.ones(self.num_trial_types) / self.num_trial_types - diff
-        # if np.sum(np.isnan(p)) > 0:
-        #     # print("fail")
-        #     return
-        # else:
-        #     # self.probabilities = self.softmax(p)
-        #     self.probabilities = self.sum_normalize(p)
+            perc_corr = self.performance_stimulus[:, 2]
+            print(perc_corr)
+            # self.probabilities = self.sum_normalize(1-perc_corr)
+            self.probabilities = self.softmax(1-perc_corr)
             print("Probabilities: ", self.probabilities)
 
     def prepare_plot_data(self, choice, early):
         self.trial_array.append((self.trial_num, self.trial_type, choice, early))
         self.early_tracker.append(early)
         st = max(0,self.trial_num-30)   
-        self.early_avg.append(np.mean(self.early_tracker[st:]))
+        self.early_avg.append(100*np.mean(self.early_tracker[st:]))
         tmp = self.trial_correct_history[st:]
         # self.correct_avg.append(np.sum(tmp[tmp == 0]) / len(tmp) * 100)
         self.correct_avg.append(collections.Counter(tmp)[0] / (len(tmp) + np.finfo(float).eps) * 100)
@@ -597,9 +601,10 @@ class DMSModel(QObject):
     def write_relative(self, output):
         # write an output without affecting other processes
         L, daq = output
+        # print('L', L)
         self.output[daq] = [x or y for x, y in zip(self.output[daq], L)]
         if not self.opts.testing:
-            print(self.output[daq])
+            # print(daq, self.output[daq])
             self.out_tasks[daq].write(self.output[daq])
 
     # def write_dev_port(self, output):
@@ -761,6 +766,10 @@ class DMSModel(QObject):
 
             if self.random or self.trial_num > 30:
                 self.update_probabilities()
+
+            side = int(self.trial_type % 2)
+            self.side_cnt[side] += 1
+            self.side_cnt[1-side] = 0
 
             times[t_idx] = 'NaN'
             t_idx += 1  # 'noise_onset'
